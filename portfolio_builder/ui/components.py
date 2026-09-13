@@ -12,7 +12,7 @@ from .charts import _money_short
 from .theme import ASSET_CLASS_SHORT, METHOD_COLORS, METHOD_LABELS
 
 METHODS = ("rule_based", "mean_variance")
-HOLDINGS_COLUMNS = ["Ticker", "Weight", "Amount", "Asset class", "Fund"]
+HOLDINGS_COLUMNS = ["Ticker", "Asset class", "Weight", "Amount"]
 
 
 def _tile(label: str, value: str, sub: str = "", tooltip: str = "", css: str = "") -> str:
@@ -54,15 +54,15 @@ def _card(resp: PortfolioResponse, method: str) -> str:
     ]
     color = METHOD_COLORS[method]
     return (
-        f"<div class='card' style='--card-accent:{color}'>"
         f"<div class='card-head'><span class='name' style='color:{color}'>{escape(rec.title)}</span>"
         f"<span class='desc'>{escape(rec.description)}</span></div>"
-        f"<div class='tiles'>{''.join(tiles)}</div></div>"
+        f"<div class='tiles'>{''.join(tiles)}</div>"
     )
 
 
-def summary_cards(resp: PortfolioResponse) -> str:
-    return f"<div class='cards'>{''.join(_card(resp, m) for m in METHODS)}</div>"
+def summary_header(resp: PortfolioResponse, method: str) -> str:
+    """Title and KPI tiles at the top of a portfolio's summary card."""
+    return _card(resp, method)
 
 
 def profile_chips(resp: PortfolioResponse) -> str:
@@ -99,8 +99,8 @@ def status_panel(errors: dict[str, str] | None = None, warnings: list[str] | Non
 def holdings_table(resp: PortfolioResponse, method: str) -> pd.DataFrame:
     rec = resp.recommendation(method)
     return pd.DataFrame(
-        [{"Ticker": h.ticker, "Weight": f"{h.weight:.1%}", "Amount": f"${h.amount:,.0f}",
-          "Asset class": ASSET_CLASS_SHORT.get(h.asset_class, h.asset_class), "Fund": h.name}
+        [{"Ticker": h.ticker, "Asset class": ASSET_CLASS_SHORT.get(h.asset_class, h.asset_class),
+          "Weight": f"{h.weight:.1%}", "Amount": f"${h.amount:,.0f}"}
          for h in rec.holdings],
         columns=HOLDINGS_COLUMNS,
     )
@@ -117,9 +117,12 @@ def backtest_caption(resp: PortfolioResponse) -> str:
 
 def notes_markdown(resp: PortfolioResponse) -> str:
     md = resp.market_data
+    funds = {h.ticker: h.name for rec in (resp.rule_based, resp.mean_variance) for h in rec.holdings}
     sections = [
         "#### Recommendation notes",
         *[f"- {n}" for n in resp.notes],
+        "#### Funds in these portfolios",
+        *[f"- **{t}**: {escape(name)}" for t, name in sorted(funds.items())],
         "#### Backtest",
         *[f"- {n}" for n in resp.backtest.notes],
         "#### Assumptions",

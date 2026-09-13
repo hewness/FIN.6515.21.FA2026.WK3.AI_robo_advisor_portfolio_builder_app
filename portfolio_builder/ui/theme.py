@@ -60,17 +60,30 @@ CSS = """
         font-size: .82rem; background: var(--block-background-fill); border: 1px solid var(--border-color-primary); }
 .chip b { font-weight: 650; }
 
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: .9rem; }
-.card { background: var(--block-background-fill); border: 1px solid var(--border-color-primary);
-        border-radius: 14px; padding: .9rem 1rem; border-top: 4px solid var(--card-accent); }
+.portfolio-card { background: var(--block-background-fill); border: 1px solid var(--border-color-primary) !important;
+                  border-radius: 14px !important; padding: .85rem 1rem .6rem !important; gap: .35rem !important;
+                  border-top: 4px solid var(--card-accent) !important; }
+.portfolio-card-rule_based { --card-accent: #4F46E5; }
+.portfolio-card-mean_variance { --card-accent: #0D9488; }
+.portfolio-card { justify-content: flex-start !important; }
+.portfolio-card > .block { flex-grow: 0 !important; }
+.card-subtitle p { margin: .35rem 0 0 !important; font-size: .82rem; color: var(--body-text-color-subdued); }
+.holdings-table table, .holdings-table th, .holdings-table td, .holdings-table span, .holdings-table input {
+  font-family: var(--font) !important; font-size: .8rem !important; white-space: nowrap !important; }
+.holdings-table th, .holdings-table td { padding: .28rem .3rem !important; }
+.holdings-table .cell-wrap { padding: 0 .1rem !important; }
+.holdings-table .cell-menu-button { display: none !important; }
+.holdings-table td:nth-child(3), .holdings-table td:nth-child(4),
+.holdings-table th:nth-child(3), .holdings-table th:nth-child(4) { text-align: right !important; }
+.holdings-table td:nth-child(1) { font-weight: 650; }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin-bottom: .6rem; }
 .card-head .name { font-weight: 700; font-size: 1rem; }
 .card-head .desc { color: var(--body-text-color-subdued); font-size: .8rem; }
 .tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; }
 @media (max-width: 1100px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.tile { border-radius: 10px; padding: .55rem .65rem; background: var(--background-fill-secondary); }
-.tile .label { font-size: .68rem; white-space: nowrap; color: var(--body-text-color-subdued); text-transform: uppercase; letter-spacing: .04em; }
+.tile { border-radius: 10px; padding: .5rem .5rem; min-width: 0; background: var(--background-fill-secondary); }
+.tile .label { font-size: .68rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--body-text-color-subdued); letter-spacing: .01em; font-weight: 550; }
 .tile .value { font-size: 1.3rem; white-space: nowrap; font-weight: 700; margin-top: .1rem; line-height: 1.2; }
 .tile .sub { font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--body-text-color-subdued); margin-top: .1rem; }
 .tile.good .value { color: #059669; } .tile.fair .value { color: #D97706; } .tile.poor .value { color: #DC2626; }

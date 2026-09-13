@@ -46,12 +46,13 @@ Then open http://127.0.0.1:7860.
 Invalid inputs are listed in a red status box in the sidebar, and the charts keep the last valid results. Input combinations worth a second look (an unreachable target, a horizon beyond age 75, a very long home or education horizon, a capped short horizon) show an amber warning.
 
 **Main panel**
-- **Summary cards** for each portfolio: expected annual return, volatility, Sharpe ratio, maximum historical drawdown (from the backtest), and probability of reaching the goal (share of 5,000 simulated outcomes at or above the target).
-- **Allocation by asset class:** two donuts with consistent colors.
+- **A summary card for each portfolio**, side by side:
+  - Tiles for expected annual return, volatility, Sharpe ratio, maximum historical drawdown (from the backtest), and probability of reaching the goal (share of 5,000 simulated outcomes at or above the target).
+  - Below the tiles, an allocation-by-asset-class donut (the same colors in both cards) next to the holdings table (ticker, asset class, weight, dollar amount).
 - **Risk vs. return:** asset classes (each an equal-weight blend of its funds), cash, the efficient frontier, the max-Sharpe portfolio and both recommended portfolios.
 - **Projected wealth:** expected (mean), optimistic (75th percentile) and pessimistic (25th percentile) paths, including the initial investment and monthly contributions, with the goal target line.
 - **Historical backtest vs. S&P 500 (SPY):** growth of the initial investment and drawdowns over 10–20 years.
-- **Holdings tables and notes & assumptions.**
+- **Notes & assumptions**, including the full name of each fund.
 
 **Backtest method** (`portfolio_builder/backtest`):
 - Daily total returns with fixed target weights. Holdings drift and reset at each rebalance date. Cash earns the risk-free rate.

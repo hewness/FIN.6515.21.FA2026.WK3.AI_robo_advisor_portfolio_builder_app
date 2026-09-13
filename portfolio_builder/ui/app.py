@@ -22,6 +22,13 @@ logger = logging.getLogger(__name__)
 
 INPUT_FIELDS = ("risk_tolerance", "horizon_years", "initial_investment", "monthly_contribution", "goal",
                 "target_amount", "age", "backtest_years", "rebalance")
+METHODS = ("rule_based", "mean_variance")
+OUTPUT_KEYS = (
+    "status", "chips",
+    "header_rule_based", "donut_rule_based", "table_rule_based",
+    "header_mean_variance", "donut_mean_variance", "table_mean_variance",
+    "scatter", "wealth", "backtest_caption", "backtest", "notes",
+)
 PRESETS = {level.label: score for level, score in RISK_LABELS.items()}
 CUSTOM = "Custom"
 
@@ -48,8 +55,9 @@ class Dashboard:
         return self._service
 
     def update(self, *values: Any) -> tuple:
+        """Returns one value per ``OUTPUT_KEYS`` entry, in that order."""
         request = dict(zip(INPUT_FIELDS, values))
-        skip = tuple(gr.skip() for _ in range(10))
+        skip = tuple(gr.skip() for _ in OUTPUT_KEYS[1:])
         try:
             resp = self.service.build_portfolio(request)
         except InputValidationError as exc:
@@ -60,19 +68,20 @@ class Dashboard:
             gr.Warning(str(exc))
             return (components.status_panel(message=str(exc)), *skip)
 
-        return (
-            components.status_panel(warnings=resp.warnings),
-            components.profile_chips(resp),
-            components.summary_cards(resp),
-            charts.allocation_donuts(resp),
-            charts.risk_return_scatter(resp),
-            charts.wealth_projection(resp),
-            components.backtest_caption(resp),
-            charts.backtest_chart(resp),
-            components.holdings_table(resp, "rule_based"),
-            components.holdings_table(resp, "mean_variance"),
-            components.notes_markdown(resp),
-        )
+        values_by_key = {
+            "status": components.status_panel(warnings=resp.warnings),
+            "chips": components.profile_chips(resp),
+            "scatter": charts.risk_return_scatter(resp),
+            "wealth": charts.wealth_projection(resp),
+            "backtest_caption": components.backtest_caption(resp),
+            "backtest": charts.backtest_chart(resp),
+            "notes": components.notes_markdown(resp),
+        }
+        for method in METHODS:
+            values_by_key[f"header_{method}"] = components.summary_header(resp, method)
+            values_by_key[f"donut_{method}"] = charts.allocation_donut(resp, method)
+            values_by_key[f"table_{method}"] = components.holdings_table(resp, method)
+        return tuple(values_by_key[key] for key in OUTPUT_KEYS)
 
 
 def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
@@ -127,19 +136,29 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
             "and compared side by side. Adjust the inputs in the sidebar; the dashboard updates automatically.</p></div>"
         )
         chips = gr.HTML()
-        summary = gr.HTML()
 
+        # One summary card per portfolio: KPI tiles, then the allocation donut beside the holdings table.
+        cards: dict[str, dict[str, Any]] = {}
         with gr.Row(equal_height=True):
-            with gr.Column(scale=5, elem_classes="chart-card"):
-                gr.Markdown("### Allocation by asset class", elem_classes="section-title")
-                gr.Markdown("Recommended weights for each approach; hover for dollar amounts.",
-                            elem_classes="section-caption")
-                pie = gr.Plot(show_label=False)
-            with gr.Column(scale=6, elem_classes="chart-card"):
-                gr.Markdown("### Risk vs. return", elem_classes="section-title")
-                gr.Markdown("Asset classes, the efficient frontier and both portfolios (annualized estimates).",
-                            elem_classes="section-caption")
-                scatter = gr.Plot(show_label=False)
+            for method in METHODS:
+                with gr.Column(elem_classes=["portfolio-card", f"portfolio-card-{method}"], min_width=520):
+                    header = gr.HTML()
+                    with gr.Row():
+                        with gr.Column(scale=5, min_width=230):
+                            gr.Markdown("**Allocation by asset class**", elem_classes="card-subtitle")
+                            donut = gr.Plot(show_label=False, container=False)
+                        with gr.Column(scale=6, min_width=250):
+                            gr.Markdown("**Holdings**", elem_classes="card-subtitle")
+                            table = gr.Dataframe(show_label=False, interactive=False, max_height=400,
+                                                 column_widths=["19%", "37%", "20%", "24%"],
+                                                 elem_classes="holdings-table")
+                cards[method] = {"header": header, "donut": donut, "table": table}
+
+        with gr.Column(elem_classes="chart-card"):
+            gr.Markdown("### Risk vs. return", elem_classes="section-title")
+            gr.Markdown("Asset classes, the efficient frontier and both portfolios (annualized estimates).",
+                        elem_classes="section-caption")
+            scatter = gr.Plot(show_label=False)
 
         with gr.Column(elem_classes="chart-card"):
             gr.Markdown("### Projected wealth", elem_classes="section-title")
@@ -153,20 +172,17 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
             bt_caption = gr.Markdown(elem_classes="section-caption")
             backtest = gr.Plot(show_label=False)
 
-        with gr.Column(elem_classes="chart-card"):
-            gr.Markdown("### Holdings", elem_classes="section-title")
-            with gr.Row():
-                rb_table = gr.Dataframe(label="Rule-based", interactive=False, wrap=True, max_height=460,
-                                        column_widths=["11%", "12%", "15%", "20%", "42%"])
-                mvo_table = gr.Dataframe(label="Mean-variance", interactive=False, wrap=True, max_height=460,
-                                         column_widths=["11%", "12%", "15%", "20%", "42%"])
-
         with gr.Accordion("Notes & assumptions", open=False):
             notes = gr.Markdown()
 
         # ---------------- Events ----------------
         inputs = [risk, horizon, initial, monthly, goal, target, age, backtest_years, rebalance]
-        outputs = [status, chips, summary, pie, scatter, wealth, bt_caption, backtest, rb_table, mvo_table, notes]
+        components_by_key = {
+            "status": status, "chips": chips,
+            **{f"{part}_{m}": cards[m][part] for m in METHODS for part in ("header", "donut", "table")},
+            "scatter": scatter, "wealth": wealth, "backtest_caption": bt_caption, "backtest": backtest, "notes": notes,
+        }
+        outputs = [components_by_key[key] for key in OUTPUT_KEYS]
         run = dict(fn=dashboard.update, inputs=inputs, outputs=outputs, show_progress="minimal")
 
         gr.on(

@@ -61,39 +61,40 @@ def _rgba(hex_color: str, alpha: float) -> str:
     return f"rgba({r}, {g}, {b}, {alpha})"
 
 
-def allocation_donuts(resp: PortfolioResponse) -> go.Figure:
-    """Side-by-side donuts of asset-class weights with consistent colors."""
-    fig = make_subplots(rows=1, cols=2, specs=[[{"type": "domain"}, {"type": "domain"}]], horizontal_spacing=0.06)
-    total = resp.request.initial_investment
-    for col, method in enumerate(METHODS, start=1):
-        rec = resp.recommendation(method)
-        by_class = {a.asset_class: a for a in rec.asset_classes}
-        classes = [c for c in ASSET_CLASS_ORDER if c in by_class]
-        fig.add_trace(
-            go.Pie(
-                labels=classes,
-                values=[by_class[c].weight for c in classes],
-                customdata=[[by_class[c].amount, by_class[c].role] for c in classes],
-                marker=dict(colors=[ASSET_CLASS_COLORS.get(c, "#CBD5E1") for c in classes],
-                            line=dict(color="rgba(255,255,255,0.9)", width=2)),
-                hole=0.62,
-                sort=False,
-                direction="clockwise",
-                textinfo="percent",
-                textposition="inside",
-                insidetextorientation="horizontal",
-                name=METHOD_LABELS[method],
-                title=dict(
-                    text=(f"<span style='color:{METHOD_COLORS[method]}'><b>{METHOD_LABELS[method]}</b></span>"
-                          f"<br><b>{_money_short(total)}</b>"),
-                    position="middle center", font=dict(size=13),
-                ),
-                hovertemplate="<b>%{label}</b><br>%{percent} · $%{customdata[0]:,.0f}<br>%{customdata[1]}<extra></extra>",
-            ),
-            row=1, col=col,
+def allocation_donut(resp: PortfolioResponse, method: str) -> go.Figure:
+    """Donut of one portfolio's asset-class weights; colors are fixed per asset class across portfolios."""
+    rec = resp.recommendation(method)
+    by_class = {a.asset_class: a for a in rec.asset_classes}
+    classes = [c for c in ASSET_CLASS_ORDER if c in by_class]
+    fig = go.Figure(
+        go.Pie(
+            labels=[ASSET_CLASS_SHORT.get(c, c) for c in classes],
+            values=[by_class[c].weight for c in classes],
+            customdata=[[c, by_class[c].amount, by_class[c].role] for c in classes],
+            marker=dict(colors=[ASSET_CLASS_COLORS.get(c, "#CBD5E1") for c in classes],
+                        line=dict(color="rgba(255,255,255,0.9)", width=2)),
+            hole=0.6,
+            sort=False,
+            direction="clockwise",
+            textinfo="percent",
+            textposition="inside",
+            insidetextorientation="horizontal",
+            name=METHOD_LABELS[method],
+            title=dict(text=f"<b>{_money_short(resp.request.initial_investment)}</b>", position="middle center",
+                       font=dict(size=15)),
+            hovertemplate="<b>%{customdata[0][0]}</b><br>%{percent} · $%{customdata[0][1]:,.0f}"
+                          "<br>%{customdata[0][2]}<extra></extra>",
         )
-    fig.update_layout(uniformtext_minsize=10, uniformtext_mode="hide")
-    return _style(fig, height=360, legend_y=-0.02)
+    )
+    fig.update_traces(domain=dict(x=[0.05, 0.95], y=[0.3, 1.0]))  # fixed donut size whatever the legend length
+    fig.update_layout(uniformtext_minsize=9, uniformtext_mode="hide")
+    _style(fig, height=340)
+    fig.update_layout(
+        margin=dict(l=4, r=4, t=4, b=4), font=dict(size=11),
+        legend=dict(orientation="h", yanchor="top", y=0.26, xanchor="center", x=0.5, font=dict(size=10.5),
+                    entrywidth=0.5, entrywidthmode="fraction"),
+    )
+    return fig
 
 
 def risk_return_scatter(resp: PortfolioResponse) -> go.Figure:

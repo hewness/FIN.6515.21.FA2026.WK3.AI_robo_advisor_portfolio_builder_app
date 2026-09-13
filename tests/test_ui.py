@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import pytest
 
 from portfolio_builder.ui import Dashboard, build_demo, charts, components
-from portfolio_builder.ui.app import INPUT_FIELDS, default_values, preset_for
+from portfolio_builder.ui.app import INPUT_FIELDS, OUTPUT_KEYS, default_values, preset_for
 
 
 @pytest.fixture(scope="module")
@@ -16,13 +16,15 @@ def trace_names(fig: go.Figure) -> list[str]:
     return [t.name for t in fig.data]
 
 
-def test_allocation_donuts(response):
-    fig = charts.allocation_donuts(response)
-    assert [t.type for t in fig.data] == ["pie", "pie"]
-    assert sum(fig.data[0].values) == pytest.approx(1.0)
-    assert "Cash and Money Markets" in fig.data[0].labels  # rule-based holds cash
+def test_allocation_donut_per_portfolio(response):
+    figs = {m: charts.allocation_donut(response, m) for m in ("rule_based", "mean_variance")}
+    for method, fig in figs.items():
+        assert [t.type for t in fig.data] == ["pie"]
+        assert sum(fig.data[0].values) == pytest.approx(1.0)
+        assert len(fig.data[0].labels) == len(response.recommendation(method).asset_classes)
+    assert "Cash" in figs["rule_based"].data[0].labels  # rule-based holds cash
     # same asset class gets the same color in both donuts
-    colors = [dict(zip(t.labels, t.marker.colors)) for t in fig.data]
+    colors = [dict(zip(f.data[0].labels, f.data[0].marker.colors)) for f in figs.values()]
     for label in set(colors[0]) & set(colors[1]):
         assert colors[0][label] == colors[1][label]
 
@@ -51,19 +53,22 @@ def test_backtest_chart(response):
 
 
 def test_components(response):
-    html = components.summary_cards(response)
-    for label in ("Exp. return", "Volatility", "Sharpe", "Max drawdown", "Goal odds"):
-        assert html.count(label) == 2
-    assert "Rule-based lifecycle portfolio" in html and "Mean-variance optimized portfolio" in html
+    for method, title in (("rule_based", "Rule-based lifecycle portfolio"),
+                          ("mean_variance", "Mean-variance optimized portfolio")):
+        html = components.summary_header(response, method)
+        assert title in html
+        for label in ("Exp. return", "Volatility", "Sharpe", "Max drawdown", "Goal odds"):
+            assert html.count(label) == 1
 
     chips = components.profile_chips(response)
     assert "Age <b>40</b>" in chips and "$1,500,000" in chips
 
     table = components.holdings_table(response, "rule_based")
-    assert list(table.columns) == ["Ticker", "Weight", "Amount", "Asset class", "Fund"]
+    assert list(table.columns) == ["Ticker", "Asset class", "Weight", "Amount"]
     assert table["Weight"].str.endswith("%").all() and table["Amount"].str.startswith("$").all()
 
-    assert "Assumptions" in components.notes_markdown(response)
+    notes = components.notes_markdown(response)
+    assert "Assumptions" in notes and "Funds in these portfolios" in notes and "**SPY**: SPY Fund" in notes
     assert "rebalancing" in components.backtest_caption(response)
 
 
@@ -88,13 +93,17 @@ def test_build_demo_constructs(portfolio_service):
 def test_dashboard_update_valid_and_invalid(portfolio_service):
     dashboard = Dashboard(portfolio_service)
     values = default_values()
-    out = dashboard.update(*[values[f] for f in INPUT_FIELDS])
-    assert len(out) == 11
-    assert "status" in out[0]
-    assert [type(o) for o in out[3:6]] == [go.Figure] * 3 and isinstance(out[7], go.Figure)
-    assert isinstance(out[8], pd.DataFrame) and isinstance(out[9], pd.DataFrame)
+    out = dict(zip(OUTPUT_KEYS, dashboard.update(*[values[f] for f in INPUT_FIELDS])))
+    assert len(out) == len(OUTPUT_KEYS) == 13
+    assert "status" in out["status"]
+    for method in ("rule_based", "mean_variance"):
+        assert "tiles" in out[f"header_{method}"]
+        assert isinstance(out[f"donut_{method}"], go.Figure)
+        assert isinstance(out[f"table_{method}"], pd.DataFrame)
+    assert all(isinstance(out[k], go.Figure) for k in ("scatter", "wealth", "backtest"))
 
     bad = {**values, "age": 95, "initial_investment": 5}
     out = dashboard.update(*[bad[f] for f in INPUT_FIELDS])
+    assert len(out) == len(OUTPUT_KEYS)
     assert "Please fix 2 inputs" in out[0]
     assert all(o == gr.skip() for o in out[1:])
