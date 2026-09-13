@@ -64,6 +64,16 @@ def build_notes(
 ) -> list[str]:
     notes = [_goal_note(request, rule_based)]
 
+    if request.hump_glide_path:
+        base = rule_based.details.get("base_equity_pct")
+        band = mean_variance.details.get("equity_band")
+        if isinstance(base, float) and profile.equity_target is not None:
+            band_text = f"; mean-variance keeps equity funds between {band[0]:.0%} and {band[1]:.0%}" if band else ""
+            notes.append(
+                f"Hump-shaped glide path at age {request.age}: {base:.0%} base equity, {profile.equity_target:.0%} "
+                f"after your risk level{band_text}."
+            )
+
     if profile.effective_risk_tolerance != profile.risk_tolerance:
         notes.append(
             f"Your {request.horizon_years}-year horizon changed the risk level used from "
@@ -102,9 +112,11 @@ def _goal_note(request: PortfolioRequest, rule_based: PortfolioRecommendation) -
     if request.goal is FinancialGoal.RETIREMENT:
         equity = rule_based.details.get("equity_pct")
         equity_text = f" ({equity:.0%} equity at age {request.age})" if isinstance(equity, float) else ""
+        trend = ("equity rises toward its mid-life peak, then eases to about 60% by retirement"
+                 if request.hump_glide_path else "equity falls as you get older")
         return (
             f"Retirement: the rule-based portfolio follows an age-based lifecycle glide path{equity_text}. "
-            "Revisit the allocation each year; equity falls as you get older."
+            f"Revisit the allocation each year; {trend}."
         )
     if request.goal in (FinancialGoal.HOME_PURCHASE, FinancialGoal.EDUCATION):
         purpose = "down payment" if request.goal is FinancialGoal.HOME_PURCHASE else "tuition"

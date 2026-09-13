@@ -91,3 +91,23 @@ def test_custom_config_validation():
     result = RuleBasedStrategy(cfg).allocate(InvestorProfile(60, 5.5), universe_inputs())
     assert result.details["equity_pct"] == pytest.approx(0.60)
     assert CASH not in result.weights.index
+
+
+@pytest.mark.parametrize("age,expected", [(25, 0.644), (45, 0.844), (70, 0.644)])
+def test_hump_glide_path_config(age, expected):
+    from portfolio_builder.optimization.glide_path import HumpGlidePath
+
+    cfg = RuleBasedConfig(glide_path=HumpGlidePath())
+    result = RuleBasedStrategy(cfg).allocate(InvestorProfile(age, 6.5), universe_inputs())
+    assert result.details["equity_pct"] == pytest.approx(expected, abs=1e-3)
+    assert result.details["glide_path"] == "hump"
+    classes = result.details["asset_class_weights"]
+    assert classes["us_large_cap"] == pytest.approx(expected * 0.55, abs=1e-3)
+    assert classes["us_aggregate_bonds"] == pytest.approx((1 - expected) * 0.70, abs=1e-3)
+
+
+def test_default_config_is_linear_rule():
+    result = RuleBasedStrategy().allocate(InvestorProfile(40, 5.5), universe_inputs())
+    assert result.details["glide_path"] == "linear"
+    assert result.details["base_equity_pct"] == pytest.approx(0.70)
+    assert result.details["equity_pct"] == pytest.approx(0.70)

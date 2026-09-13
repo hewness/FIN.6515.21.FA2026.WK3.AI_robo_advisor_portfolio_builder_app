@@ -85,6 +85,11 @@ class PortfolioRequest(BaseModel):
         description="How often the backtest resets holdings to target weights.",
         json_schema_extra={"widget": "radio"},
     )
+    hump_glide_path: bool = Field(
+        default=True, title="Hump-shaped equity glide path",
+        description="On: equity rises to ~80% at mid-life and eases to ~60% at retirement. Off: 110 - age.",
+        json_schema_extra={"widget": "checkbox"},
+    )
 
     @field_validator("risk_tolerance", mode="before")
     @classmethod
@@ -172,6 +177,8 @@ class ProfileSummary(BaseModel):
     effective_risk_tolerance: float
     risk_band: str
     horizon_adjustment: str
+    glide_path: str = "Linear (110 − age)"
+    equity_target: float | None = None
 
 
 class MarketDataSummary(BaseModel):
@@ -291,6 +298,7 @@ class EfficientFrontierData(BaseModel):
     client_point: PortfolioPoint
     rule_based_point: PortfolioPoint
     asset_class_points: list[AssetClassPoint] = Field(default_factory=list)
+    label: str = "Efficient frontier"
 
 
 class BacktestMetricsData(BaseModel):

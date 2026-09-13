@@ -115,7 +115,8 @@ CSS = """
 .card-head { display: flex; flex-direction: column; gap: .1rem; margin-bottom: .6rem; }
 .card-head .name { font-weight: 700; font-size: 1.12rem; line-height: 1.3; }
 .card-head .desc { color: var(--body-text-color-subdued); font-size: .8rem; line-height: 1.35;
-                   min-height: calc(2 * 1.35em); }  /* same height in both cards keeps sections aligned */
+                   height: calc(2 * 1.35em); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical;
+                   -webkit-line-clamp: 2; }  /* exactly two lines in both cards keeps sections aligned */
 .tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; }
 @media (max-width: 1100px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -56,7 +56,7 @@ def _card(resp: PortfolioResponse, method: str) -> str:
     color = METHOD_COLORS[method]
     return (
         f"<div class='card-head'><span class='name' style='color:{color}'>{escape(rec.title)}</span>"
-        f"<span class='desc'>{escape(rec.description)}</span></div>"
+        f"<span class='desc' title='{escape(rec.description)}'>{escape(rec.description)}</span></div>"
         f"<div class='tiles'>{''.join(tiles)}</div>"
     )
 
@@ -75,6 +75,8 @@ def profile_chips(resp: PortfolioResponse) -> str:
         f"👤 Age <b>{p.age}</b>",
         f"🎯 {escape(p.goal_label)} · <b>${target:,.0f}</b>" if target else f"🎯 {escape(p.goal_label)}",
         f"⏳ <b>{p.horizon_years}</b> yr horizon",
+        (f"📈 {escape(p.glide_path)} glide path · <b>{p.equity_target:.0%}</b> equity"
+         if p.equity_target is not None else f"📈 {escape(p.glide_path)} glide path"),
         f"🎚️ {risk} · {escape(p.risk_band)}",
         f"📅 Data as of <b>{escape(resp.market_data.data_as_of or '—')}</b>",
     ]

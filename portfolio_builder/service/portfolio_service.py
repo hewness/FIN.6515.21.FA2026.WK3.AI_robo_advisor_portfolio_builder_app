@@ -15,6 +15,7 @@ from ..backtest import BENCHMARK_KEY, BacktestConfig, BacktestError, Backtester,
 from ..market_data import MarketDataError
 from ..optimization import (
     CASH,
+    RuleBasedConfig,
     AllocationResult,
     InvestorProfile,
     MarketInputs,
@@ -22,6 +23,7 @@ from ..optimization import (
     PortfolioOptimizationEngine,
     get_optimization_engine,
 )
+from ..optimization.glide_path import HumpGlidePath, get_glide_path
 from ..universe import get_asset_class, get_asset_class_for_ticker, get_asset_classes
 from .frontier_position import locate_on_frontier
 from .projection import ProjectionConfig, project_portfolio_value
@@ -55,6 +57,17 @@ METHOD_TEXT = {
     "mean_variance": (
         "Mean-variance Optimized Portfolio",
         "Highest expected return on the efficient frontier for a volatility target set by risk tolerance.",
+    ),
+}
+HUMP_DESCRIPTIONS = {
+    "rule_based": (
+        f"Equity follows a hump-shaped glide path (peak {HumpGlidePath().peak[1]:.0%} at {HumpGlidePath().peak[0]:g}, "
+        f"{HumpGlidePath().points[-1][1]:.0%} from {HumpGlidePath().points[-1][0]:g}), adjusted for risk tolerance; "
+        "split by fixed sleeves."
+    ),
+    "mean_variance": (
+        "Highest expected return for a risk-tolerance volatility target, keeping equity funds within ±5 points "
+        "of the glide path."
     ),
 }
 BENCHMARK_TICKER = "SPY"
@@ -122,8 +135,11 @@ class PortfolioService:
         try:
             with self._lock:
                 inputs = self.engine.market_inputs()
-                rule = self.engine.optimize("rule_based", profile, inputs=inputs)
-                mvo = self.engine.optimize("mean_variance", profile, inputs=inputs)
+                glide = get_glide_path("hump" if req.hump_glide_path else "linear")
+                rule = self.engine.optimize("rule_based", profile, inputs=inputs,
+                                            config=RuleBasedConfig(glide_path=glide))
+                mvo = self.engine.optimize("mean_variance", profile, inputs=inputs,
+                                           glide_path=glide if req.hump_glide_path else None)
                 names = self._fund_names([*rule.weights.index, *mvo.weights.index])
                 data_as_of = self._data_as_of()
                 backtest = self.backtester.run(
@@ -150,6 +166,8 @@ class PortfolioService:
             effective_risk_tolerance=effective_risk,
             risk_band=risk_band(effective_risk),
             horizon_adjustment=horizon_note,
+            glide_path=glide.label,
+            equity_target=float(rule.details["equity_pct"]),
         )
         rule_rec = self._recommendation("rule_based", rule, req, names, frontier_points)
         mvo_rec = self._recommendation("mean_variance", mvo, req, names, frontier_points)
@@ -158,6 +176,8 @@ class PortfolioService:
 
         frontier = _frontier_data(mvo, rule_rec, mvo_rec)
         frontier.asset_class_points = _asset_class_points(inputs)
+        if req.hump_glide_path:
+            frontier.label = "Efficient frontier (glide-path equity band)"
         return PortfolioResponse(
             request=req,
             profile=summary,
@@ -197,6 +217,8 @@ class PortfolioService:
 
         m = result.metrics
         title, description = METHOD_TEXT[method]
+        if req.hump_glide_path:
+            description = HUMP_DESCRIPTIONS[method]
         return PortfolioRecommendation(
             method=method,
             title=title,
@@ -409,6 +431,7 @@ def recommend_portfolio(
     target_amount: float | None = None,
     backtest_years: int = 10,
     rebalance: str = "quarterly",
+    hump_glide_path: bool = True,
 ) -> PortfolioResponse:
     """Build both portfolios from UI form values (arguments in form order, e.g. Gradio inputs)."""
     return get_portfolio_service().build_portfolio(
@@ -422,5 +445,6 @@ def recommend_portfolio(
             "target_amount": target_amount,
             "backtest_years": backtest_years,
             "rebalance": rebalance,
+            "hump_glide_path": hump_glide_path,
         }
     )

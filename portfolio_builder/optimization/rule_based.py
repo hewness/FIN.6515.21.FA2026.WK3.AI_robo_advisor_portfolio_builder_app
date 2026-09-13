@@ -1,4 +1,4 @@
-"""Rule-based allocation: equity % = base - age, adjusted by risk tolerance."""
+"""Rule-based allocation: equity share from a glide path (default: 110 - age), adjusted by risk tolerance."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import pandas as pd
 
 from ..universe import get_asset_class
 from .base import AllocationStrategy, OptimizationError
+from .glide_path import GlidePath, LinearGlidePath, equity_target
 from .inputs import MarketInputs, portfolio_metrics
 from .models import CASH, AllocationResult, InvestorProfile
 
@@ -33,6 +34,12 @@ class RuleBasedConfig:
     defensive_sleeve: dict[str, float] = field(
         default_factory=lambda: {"us_aggregate_bonds": 0.70, "tips": 0.20, "cash": 0.10}
     )
+    # Equity share by age before the risk shift; None means the linear ``base - age`` rule.
+    glide_path: GlidePath | None = None
+
+    @property
+    def path(self) -> GlidePath:
+        return self.glide_path if self.glide_path is not None else LinearGlidePath(self.base)
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.min_equity <= self.max_equity <= 1.0:
@@ -53,9 +60,7 @@ class RuleBasedStrategy(AllocationStrategy):
     def equity_fraction(self, profile: InvestorProfile) -> tuple[float, float]:
         """Return (equity fraction after clamping, risk shift in percentage points)."""
         cfg = self.config
-        shift = -cfg.max_risk_shift + 2 * cfg.max_risk_shift * profile.risk_fraction
-        raw = (cfg.base - profile.age + shift) / 100.0
-        return min(max(raw, cfg.min_equity), cfg.max_equity), shift
+        return equity_target(cfg.path, profile, cfg.max_risk_shift, cfg.min_equity, cfg.max_equity)
 
     def allocate(self, profile: InvestorProfile, inputs: MarketInputs) -> AllocationResult:
         equity, shift = self.equity_fraction(profile)
@@ -86,6 +91,8 @@ class RuleBasedStrategy(AllocationStrategy):
             metrics=portfolio_metrics(series, inputs),
             details={
                 "equity_pct": equity,
+                "glide_path": self.config.path.name,
+                "base_equity_pct": self.config.path.base_equity(profile.age),
                 "risk_shift_points": shift,
                 "asset_class_weights": class_weights,
                 "ticker_order_by_volatility": ticker_order,

@@ -106,9 +106,9 @@ def risk_return_scatter(resp: PortfolioResponse) -> go.Figure:
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=[p.volatility for p in ef.points], y=[p.expected_return for p in ef.points],
-        mode="lines", name="Efficient frontier", line=dict(color=FRONTIER_COLOR, width=2.5, dash="dash"),
+        mode="lines", name=ef.label, line=dict(color=FRONTIER_COLOR, width=2.5, dash="dash"),
         customdata=[p.sharpe_ratio for p in ef.points],
-        hovertemplate="Frontier<br>Return %{y:.2%} · Risk %{x:.2%}<br>Sharpe %{customdata:.2f}<extra></extra>",
+        hovertemplate=f"{ef.label}<br>Return %{{y:.2%}} · Risk %{{x:.2%}}<br>Sharpe %{{customdata:.2f}}<extra></extra>",
     ))
     points = ef.asset_class_points
     fig.add_trace(go.Scatter(

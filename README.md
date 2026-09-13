@@ -36,7 +36,8 @@ Then open http://127.0.0.1:7860.
 | About you | Age | Number | 18–80 | 40 |
 | | Financial goal | Dropdown | Retirement / Home purchase / Education / General wealth | Retirement |
 | | Goal target | Money text | $1,000–$100M; resets to the goal's default when the goal changes | $1.5M (home $150k, education $200k, general $1M) |
-| Risk profile | Risk tolerance | Preset (Conservative / Moderate / Aggressive / Custom) + 1–10 slider | presets = 3 / 5.5 / 8 | Moderate (5.5) |
+| Risk profile | Hump-shaped equity glide path | Checkbox | On / Off | On |
+| | Risk tolerance | Preset (Conservative / Moderate / Aggressive / Custom) + 1–10 slider | presets = 3 / 5.5 / 8 | Moderate (5.5) |
 | Investment plan | Initial investment | Money text | $1,000–$10,000,000 | $50,000 |
 | | Monthly contribution | Money text | $0–$50,000 | $1,000 |
 | | Investment horizon | Slider | 1–30 years | 25 |
@@ -65,6 +66,21 @@ Invalid inputs are listed in a red status box in the sidebar, and the charts kee
 - Before a fund existed, an older ETF tracking the same asset class stands in: VTI→SPY, VXUS→EFA, VWO→EEM, BND→AGG, VTIP→TIP (`HISTORY_PROXIES` in `universe.py`). These history proxies are used only to extend the backtest; they are never recommended or held, and the backtest notes list where they were used.
 - It models the initial investment only, with no contributions, fees or taxes.
 - Mean-variance weights are estimated on overlapping history, so that backtest is in-sample.
+
+## Equity glide path
+
+The **Hump-shaped equity glide path** toggle (on by default) controls how equity changes with age in both models.
+
+| Age | 18–25 | 35 | 45 | 55 | 65+ |
+|---|---|---|---|---|---|
+| Hump-shaped base equity | 60% | 70% | 80% | 70% | 60% |
+| Linear base equity (110 − age, toggle off) | 92–85% | 75% | 65% | 55% | ≤45% |
+
+- The hump path is piecewise-linear through 60% at 25, 80% at 45 and 60% at 65, and flat outside those ages (`HumpGlidePath` in `portfolio_builder/optimization/glide_path.py`).
+- Risk tolerance shifts the base by −20 points (risk 1) to +20 points (risk 10), and the result is kept between 10% and 100%. This is the same shift as the linear rule.
+- **Rule-based:** the equity share above sets the equity sleeve (US large-cap, international developed, emerging markets, REITs); bonds, TIPS and cash fill the rest.
+- **Mean-variance:** equity funds (VTI, VXUS, VWO, VNQ) must total that equity share ±5 points; BND and VTIP fill the rest. Risk tolerance still chooses the volatility target, and the efficient frontier, reference portfolios and client portfolio are all solved within the band. The risk/return chart labels this frontier "glide-path equity band".
+- With the toggle off, both models run exactly as before: the linear rule and an unconstrained mean-variance optimization.
 
 ## Investment universe
 

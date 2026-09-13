@@ -43,6 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target", type=float, help="Goal target in $ (default depends on goal)")
     parser.add_argument("--backtest-years", type=int, default=d["backtest_years"], help="Backtest lookback, 10-20 years")
     parser.add_argument("--rebalance", default=d["rebalance"], help="monthly, quarterly or annual")
+    parser.add_argument("--glide-path", choices=("hump", "linear"), default="hump" if d["hump_glide_path"] else "linear",
+                        help="Equity glide path: hump-shaped (default) or linear 110 - age")
     parser.add_argument("--json", action="store_true", help="Print the full response as JSON")
     args = parser.parse_args(argv)
 
@@ -52,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
             "risk_tolerance": args.risk, "horizon_years": args.horizon, "initial_investment": args.initial,
             "monthly_contribution": args.monthly, "goal": args.goal, "age": args.age,
             "target_amount": args.target, "backtest_years": args.backtest_years, "rebalance": args.rebalance,
+            "hump_glide_path": args.glide_path == "hump",
         })
     except InputValidationError as exc:
         for field, message in exc.field_errors.items():
@@ -70,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Age {pr.age} | goal {pr.goal_label} | horizon {pr.horizon_years}y | risk {pr.risk_tolerance_input} "
           f"-> effective {pr.effective_risk_tolerance:g} ({pr.risk_band})")
     print(f"{pr.horizon_adjustment}")
+    print(f"Glide path: {pr.glide_path} -> equity target {pr.equity_target:.1%}")
     print(f"Estimates: {md.estimation_start} to {md.estimation_end} ({md.observations} {md.frequency} obs), "
           f"risk-free {md.risk_free_rate:.2%}, data as of {md.data_as_of}")
     _print_recommendation(response.rule_based)

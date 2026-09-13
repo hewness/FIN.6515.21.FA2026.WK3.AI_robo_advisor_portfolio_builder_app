@@ -26,6 +26,9 @@ ASSET_CLASSES: tuple[AssetClass, ...] = (
     AssetClass("cash", "Cash and Money Markets", "Liquidity, capital preservation"),
 )
 
+# Asset classes counted as equity (growth assets) by glide paths and the mean-variance equity band.
+EQUITY_ASSET_CLASSES: tuple[str, ...] = ("us_large_cap", "intl_developed", "emerging_markets", "real_estate")
+
 # Backtest-only history proxies: older ETFs tracking the same asset class whose returns stand in before a
 # universe fund's inception, so 10-20 year backtests remain possible. They are never recommended or held.
 HISTORY_PROXIES: dict[str, str] = {"VTI": "SPY", "VXUS": "EFA", "VWO": "EEM", "BND": "AGG", "VTIP": "TIP"}
@@ -44,6 +47,11 @@ for _fund, _proxy in HISTORY_PROXIES.items():
 
 def get_asset_classes() -> tuple[AssetClass, ...]:
     return ASSET_CLASSES
+
+
+def equity_tickers() -> list[str]:
+    """Universe tickers in the equity asset classes (see ``EQUITY_ASSET_CLASSES``)."""
+    return [t for ac in ASSET_CLASSES if ac.key in EQUITY_ASSET_CLASSES for t in ac.tickers]
 
 
 def get_history_proxies() -> dict[str, str]:

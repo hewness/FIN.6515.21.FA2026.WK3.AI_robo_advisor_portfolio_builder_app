@@ -6,6 +6,8 @@ import pytest
 
 from portfolio_builder.optimization import InvestorProfile, MarketInputs, MeanVarianceStrategy, OptimizationError
 from portfolio_builder.optimization import mean_variance as mv
+from portfolio_builder.optimization.glide_path import HumpGlidePath
+from portfolio_builder.universe import equity_tickers, get_tickers
 
 TICKERS = ["SPY", "EFA", "AGG", "TIP", "VNQ"]
 
@@ -170,3 +172,113 @@ def test_strategy_argument_validation():
         MeanVarianceStrategy(objective="bogus")
     with pytest.raises(ValueError):
         MeanVarianceStrategy(vol_range=(0.8, 0.2))
+
+
+# -- glide-path equity band ------------------------------------------------------
+
+UNIVERSE = get_tickers()  # VTI, VXUS, VWO, BND, VTIP, VNQ
+
+
+def universe_synthetic_inputs(rf: float = 0.03) -> MarketInputs:
+    mu = np.array([0.10, 0.08, 0.075, 0.03, 0.025, 0.085])
+    vol = np.array([0.16, 0.17, 0.21, 0.05, 0.03, 0.20])
+    corr = np.full((6, 6), 0.15)
+    corr[:3, :3] = 0.75
+    corr[5, :3] = corr[:3, 5] = 0.6
+    np.fill_diagonal(corr, 1.0)
+    cov = corr * np.outer(vol, vol)
+    return MarketInputs(pd.Series(mu, index=UNIVERSE), pd.DataFrame(cov, index=UNIVERSE, columns=UNIVERSE), rf)
+
+
+def equity_group(lower, upper):
+    return mv.GroupBound(np.isin(UNIVERSE, equity_tickers()), lower, upper)
+
+
+def frontier_is_monotone(points):
+    return points["expected_return"].is_monotonic_increasing and (points["volatility"].diff().dropna() >= -1e-8).all()
+
+
+def test_group_bound_solvers_respect_band():
+    inputs = universe_synthetic_inputs()
+    mu, cov = inputs.expected_returns.to_numpy(), inputs.covariance.to_numpy()
+    group = equity_group(0.55, 0.65)
+    results = [
+        mv.min_volatility(mu, cov, group=group),
+        mv.max_return(mu, group=group),
+        mv.max_sharpe(mu, cov, inputs.risk_free_rate, group=group),
+        mv.efficient_risk(mu, cov, 0.10, group=group)[0],
+        mv.efficient_return(mu, cov, 0.07, group=group),
+    ]
+    for w in results:
+        assert_valid(w)
+        assert 0.55 - 1e-6 <= group.total(w) <= 0.65 + 1e-6
+    assert group.total(mv.min_volatility(mu, cov)) < 0.55  # the band binds for min volatility
+
+
+def test_group_max_return_matches_grid():
+    mu = np.array([0.10, 0.04, 0.06])
+    group = mv.GroupBound(np.array([True, False, False]), 0.3, 0.5)
+    w = mv.max_return(mu, group=group)
+    best = max(
+        a * mu[0] + b * mu[1] + (1 - a - b) * mu[2]
+        for a in np.linspace(0, 1, 101) for b in np.linspace(0, 1, 101)
+        if a + b <= 1 + 1e-12 and 0.3 - 1e-9 <= a <= 0.5 + 1e-9
+    )
+    assert w @ mu == pytest.approx(best, abs=1e-9)
+    np.testing.assert_allclose(w, [0.5, 0.0, 0.5], atol=1e-9)
+
+
+def test_constrained_frontier_within_band_and_monotone():
+    inputs = universe_synthetic_inputs()
+    group = equity_group(0.75, 0.85)
+    frontier = mv.efficient_frontier(inputs, n_points=15, group=group)
+    assert frontier_is_monotone(frontier.points)
+    for _, row in frontier.weights.iterrows():
+        assert 0.75 - 1e-6 <= group.total(row.to_numpy()) <= 0.85 + 1e-6
+
+
+def test_infeasible_band_raises():
+    inputs = universe_synthetic_inputs()
+    mu, cov = inputs.expected_returns.to_numpy(), inputs.covariance.to_numpy()
+    with pytest.raises(OptimizationError, match="infeasible"):
+        mv.min_volatility(mu, cov, max_weight=0.2, group=equity_group(0.9, 1.0))  # 4 equity funds at 20% = 80% max
+    with pytest.raises(OptimizationError):
+        mv.GroupBound(np.ones(6, dtype=bool), 0.7, 0.6)
+
+
+@pytest.mark.parametrize("age", [25, 45, 70])
+def test_strategy_with_glide_path_keeps_equity_in_band(age):
+    inputs = universe_synthetic_inputs()
+    strategy = MeanVarianceStrategy(n_points=12, glide_path=HumpGlidePath())
+    vols = []
+    for risk in range(1, 11):
+        result = strategy.allocate(InvestorProfile(age, risk), inputs)
+        d = result.details
+        lo, hi = d["equity_band"]
+        assert lo - 1e-6 <= d["equity_weight"] <= hi + 1e-6
+        assert d["glide_path"] == "hump"
+        for _, row in result.frontier.weights.iterrows():
+            assert lo - 1e-6 <= row[equity_tickers()].sum() <= hi + 1e-6
+        vols.append(result.metrics.volatility)
+    assert all(b >= a - 1e-6 for a, b in zip(vols, vols[1:]))
+
+
+def test_strategy_without_glide_path_is_unchanged():
+    inputs = universe_synthetic_inputs()
+    profile = InvestorProfile(45, 6)
+    plain = MeanVarianceStrategy(n_points=12).allocate(profile, inputs)
+    explicit = MeanVarianceStrategy(n_points=12, glide_path=None).allocate(profile, inputs)
+    pd.testing.assert_series_equal(plain.weights, explicit.weights)
+    assert "equity_band" not in plain.details
+    pd.testing.assert_frame_equal(plain.frontier.points, mv.efficient_frontier(inputs, 12).points)
+
+
+def test_glide_path_needs_equity_and_non_equity_funds():
+    inputs = synthetic_inputs()  # SPY, EFA, AGG, TIP, VNQ: only VNQ is a universe equity fund
+    strategy = MeanVarianceStrategy(n_points=5, glide_path=HumpGlidePath())
+    result = strategy.allocate(InvestorProfile(40, 5), inputs)
+    assert result.details["equity_weight"] == pytest.approx(result.weights["VNQ"])
+    bonds = ["AGG", "TIP"]
+    only_bonds = MarketInputs(inputs.expected_returns[bonds], inputs.covariance.loc[bonds, bonds])
+    with pytest.raises(OptimizationError, match="equity and non-equity"):
+        strategy.allocate(InvestorProfile(40, 5), only_bonds)

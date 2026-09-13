@@ -74,7 +74,8 @@ def test_coerces_widget_values_and_forbids_unknown_fields():
 def test_form_options_match_model():
     options = get_form_options()
     assert list(options) == ["risk_tolerance", "horizon_years", "initial_investment", "monthly_contribution", "goal",
-                             "age", "target_amount", "backtest_years", "rebalance"]
+                             "age", "target_amount", "backtest_years", "rebalance", "hump_glide_path"]
+    assert options["hump_glide_path"]["default"] is True and options["hump_glide_path"]["widget"] == "checkbox"
     for field, (low, high) in BOUNDS.items():
         assert (options[field]["minimum"], options[field]["maximum"]) == (low, high)
     assert options["risk_tolerance"]["minimum"] == 1 and options["risk_tolerance"]["maximum"] == 10
@@ -85,3 +86,10 @@ def test_form_options_match_model():
     assert options["target_amount"]["default"] == 1_500_000
     assert [c["value"] for c in options["rebalance"]["choices"]] == ["monthly", "quarterly", "annual"]
     assert options["horizon_years"]["widget"] == "slider"
+
+
+@pytest.mark.parametrize("value,expected", [(True, True), (False, False), ("true", True), ("false", False),
+                                            ("on", True), (0, False)])
+def test_hump_glide_path_coercion(value, expected):
+    assert PortfolioRequest(hump_glide_path=value).hump_glide_path is expected
+    assert PortfolioRequest().hump_glide_path is True

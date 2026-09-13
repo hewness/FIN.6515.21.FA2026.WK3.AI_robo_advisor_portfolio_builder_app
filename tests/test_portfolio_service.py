@@ -188,3 +188,33 @@ def test_backtest_settings_and_empty_number(portfolio_service):
         portfolio_service.build_portfolio({**REQUEST, "monthly_contribution": None, "backtest_years": 25})
     assert info.value.field_errors["monthly_contribution"] == "Monthly contribution ($) must be a number between 0 and 50,000"
     assert "10 and 20" in info.value.field_errors["backtest_years"]
+
+
+def test_hump_glide_path_is_default(response):
+    assert response.request.hump_glide_path is True
+    assert response.profile.glide_path == "Hump-shaped"
+    target = response.profile.equity_target
+    assert response.rule_based.details["equity_pct"] == pytest.approx(target)
+    lo, hi = response.mean_variance.details["equity_band"]
+    assert lo == pytest.approx(target - 0.05) and hi == pytest.approx(target + 0.05)
+    assert lo - 1e-6 <= response.mean_variance.details["equity_weight"] <= hi + 1e-6
+    assert response.efficient_frontier.label == "Efficient frontier (glide-path equity band)"
+    assert any("Hump-shaped glide path at age 45" in n for n in response.notes)
+    assert "hump-shaped glide path" in response.rule_based.description
+
+
+def test_toggle_off_matches_linear_models(portfolio_service):
+    from portfolio_builder.optimization import InvestorProfile
+
+    off = portfolio_service.build_portfolio({**REQUEST, "hump_glide_path": False})
+    engine = portfolio_service.engine
+    profile = InvestorProfile(age=45, risk_tolerance=off.profile.effective_risk_tolerance)
+    inputs = engine.market_inputs()
+    rule = engine.optimize("rule_based", profile, inputs=inputs)  # default strategies = pre-change behavior
+    mvo = engine.optimize("mean_variance", profile, inputs=inputs)
+    assert {h.ticker: h.weight for h in off.rule_based.holdings} == pytest.approx(rule.weights[rule.weights > 0].to_dict())
+    assert {h.ticker: h.weight for h in off.mean_variance.holdings} == pytest.approx(mvo.weights[mvo.weights > 0].to_dict())
+    assert off.profile.glide_path.startswith("Linear")
+    assert off.efficient_frontier.label == "Efficient frontier"
+    assert "equity_band" not in off.mean_variance.details
+    assert not any("Hump-shaped glide path" in n for n in off.notes)

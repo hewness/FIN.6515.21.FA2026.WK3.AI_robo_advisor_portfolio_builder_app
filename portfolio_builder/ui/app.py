@@ -15,6 +15,7 @@ from ..service import (
     get_form_options,
     get_portfolio_service,
 )
+from ..optimization.glide_path import HumpGlidePath
 from ..universe import get_tickers
 from . import charts, components
 from .formatting import format_money, parse_money
@@ -24,7 +25,7 @@ from .theme import CSS, THEME
 logger = logging.getLogger(__name__)
 
 INPUT_FIELDS = ("risk_tolerance", "horizon_years", "initial_investment", "monthly_contribution", "goal",
-                "target_amount", "age", "backtest_years", "rebalance")
+                "target_amount", "age", "backtest_years", "rebalance", "hump_glide_path")
 METHODS = ("rule_based", "mean_variance")
 CARD_PARTS = ("header", "donut", "table", "wealth")
 OUTPUT_KEYS = (
@@ -51,6 +52,9 @@ def sidebar_tooltips() -> dict[str, str]:
         "in-goal": "What you are investing for. It adds context to the recommendation and sets a default goal target.",
         "in-target": ("What you want the portfolio to be worth at the end of your horizon ($1,000 – $100,000,000). "
                       f"Used for the goal probability. Defaults: {goal_defaults}."),
+        "in-glide-path": (f"On (default): equity follows a hump-shaped glide path, {HumpGlidePath().describe()}. "
+                          "Risk tolerance shifts it by up to ±20 points, and the mean-variance portfolio keeps equity "
+                          "funds within ±5 points of it. Off: the classic 110 − age rule."),
         "in-risk-preset": "Drives the equity vs. bond allocation. Pick a preset, or fine-tune the risk score below.",
         "in-risk": f"1 = most conservative, 10 = most aggressive. Presets: {presets}.",
         "in-initial": "Starting portfolio value ($1,000 – $10,000,000).",
@@ -138,6 +142,8 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
                                 placeholder="$1,500,000", elem_id="in-target", elem_classes="money-input")
 
             gr.Markdown("### Risk profile", elem_classes="sb-section")
+            glide = gr.Checkbox(label="Hump-shaped equity glide path", value=defaults["hump_glide_path"],
+                                elem_id="in-glide-path", elem_classes="glide-toggle")
             risk_preset = gr.Radio(label="Risk tolerance", choices=[*PRESETS, CUSTOM],
                                    value=preset_for(defaults["risk_tolerance"]), elem_id="in-risk-preset")
             risk = gr.Slider(label="Risk score", minimum=opts["risk_tolerance"]["minimum"],
@@ -211,7 +217,7 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
             notes = gr.Markdown()
 
         # ---------------- Events ----------------
-        inputs = [risk, horizon, initial, monthly, goal, target, age, backtest_years, rebalance]
+        inputs = [risk, horizon, initial, monthly, goal, target, age, backtest_years, rebalance, glide]
         components_by_key = {
             "status": status, "chips": chips,
             **{f"{part}_{m}": cards[m][part] for m in METHODS for part in CARD_PARTS},
@@ -221,7 +227,7 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
         run = dict(fn=dashboard.update, inputs=inputs, outputs=outputs, show_progress="minimal")
 
         gr.on(
-            triggers=[risk.release, horizon.release, backtest_years.release, rebalance.input,
+            triggers=[risk.release, horizon.release, backtest_years.release, rebalance.input, glide.input,
                       initial.blur, initial.submit, monthly.blur, monthly.submit,
                       target.blur, target.submit, age.blur, age.submit],
             trigger_mode="always_last",
@@ -243,9 +249,10 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
             d = default_values()
             return (preset_for(d["risk_tolerance"]), d["risk_tolerance"], d["horizon_years"],
                     format_money(d["initial_investment"]), format_money(d["monthly_contribution"]), d["goal"],
-                    format_money(d["target_amount"]), d["age"], d["backtest_years"], d["rebalance"])
+                    format_money(d["target_amount"]), d["age"], d["backtest_years"], d["rebalance"],
+                    d["hump_glide_path"])
 
-        reset.click(reset_values, outputs=[risk_preset, *inputs[:5], target, age, backtest_years, rebalance],
+        reset.click(reset_values, outputs=[risk_preset, *inputs[:5], target, age, backtest_years, rebalance, glide],
                     show_progress="hidden").then(**run)
         demo.load(**run)
 

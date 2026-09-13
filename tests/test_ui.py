@@ -45,8 +45,9 @@ def test_allocation_donut_per_portfolio(response):
 
 def test_risk_return_scatter(response):
     names = trace_names(charts.risk_return_scatter(response))
-    assert names == ["Efficient frontier", "Asset classes", "Max Sharpe",
+    assert names == [response.efficient_frontier.label, "Asset classes", "Max Sharpe",
                      "Rule-based Lifecycle Portfolio", "Mean-variance Optimized Portfolio"]
+    assert names[0] == "Efficient frontier (glide-path equity band)"  # hump glide path is the default
     fig = charts.risk_return_scatter(response)
     assert len(fig.data[1].x) == 7  # 6 asset classes + cash
     frontier = fig.data[0]
@@ -208,3 +209,21 @@ def test_holdings_table_fits_largest_portfolio_without_scrolling(portfolio_servi
     demo = build_demo(portfolio_service)
     tables = [b for b in demo.blocks.values() if isinstance(b, gr.Dataframe)]
     assert len(tables) == 2 and all(t.max_height == HOLDINGS_TABLE_HEIGHT for t in tables)
+
+
+
+def test_glide_path_toggle(portfolio_service):
+    demo = build_demo(portfolio_service)
+    boxes = [b for b in demo.blocks.values() if getattr(b, "elem_id", None) == "in-glide-path"]
+    assert len(boxes) == 1 and isinstance(boxes[0], gr.Checkbox) and boxes[0].value is True
+    assert "hump_glide_path" in INPUT_FIELDS and default_values()["hump_glide_path"] is True
+    assert "110 − age" in sidebar_tooltips()["in-glide-path"]
+
+    dashboard = Dashboard(portfolio_service)
+    values = default_values()
+    on = dict(zip(OUTPUT_KEYS, dashboard.update(*[values[f] for f in INPUT_FIELDS])))
+    off_values = {**values, "hump_glide_path": False}
+    off = dict(zip(OUTPUT_KEYS, dashboard.update(*[off_values[f] for f in INPUT_FIELDS])))
+    assert "Hump-shaped glide path" in on["chips"] and "Linear" in off["chips"]
+    assert on["scatter"].data[0].name != off["scatter"].data[0].name
+    assert not on["table_rule_based"].equals(off["table_rule_based"])

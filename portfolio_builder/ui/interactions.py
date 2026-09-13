@@ -80,7 +80,7 @@ TOOLTIP_JS = """
     for (const [id, text] of Object.entries(TIPS)) {
       const block = document.getElementById(id);
       if (!block) continue;
-      const label = block.querySelector('[data-testid="block-info"]');
+      const label = block.querySelector('[data-testid="block-info"], .label-text');  // .label-text: checkboxes
       if (!label || label.dataset.tip === text) continue;
       label.dataset.tip = text;
       label.classList.add("has-tip");
