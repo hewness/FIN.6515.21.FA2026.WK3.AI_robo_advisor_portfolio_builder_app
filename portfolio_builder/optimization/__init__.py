@@ -1,0 +1,39 @@
+"""Portfolio optimization engine.
+
+Typical use::
+
+    from portfolio_builder.optimization import InvestorProfile, get_optimization_engine
+
+    engine = get_optimization_engine(risk_free_rate=0.04)
+    profile = InvestorProfile(age=40, risk_tolerance=6)
+    rule = engine.optimize("rule_based", profile)
+    mvo = engine.optimize("mean_variance", profile)       # includes mvo.frontier
+    engine.optimize("mean_variance", profile, objective="max_sharpe")
+"""
+
+from .base import AllocationStrategy, OptimizationError
+from .engine import PortfolioOptimizationEngine, get_optimization_engine
+from .inputs import MarketInputs, build_market_inputs, portfolio_metrics
+from .mean_variance import MeanVarianceStrategy, efficient_frontier
+from .models import CASH, AllocationResult, EfficientFrontier, InvestorProfile, Portfolio, PortfolioMetrics
+from .rule_based import RuleBasedConfig, RuleBasedStrategy
+
+__all__ = [
+    "CASH",
+    "AllocationResult",
+    "AllocationStrategy",
+    "EfficientFrontier",
+    "InvestorProfile",
+    "MarketInputs",
+    "MeanVarianceStrategy",
+    "OptimizationError",
+    "Portfolio",
+    "PortfolioMetrics",
+    "PortfolioOptimizationEngine",
+    "RuleBasedConfig",
+    "RuleBasedStrategy",
+    "build_market_inputs",
+    "efficient_frontier",
+    "get_optimization_engine",
+    "portfolio_metrics",
+]

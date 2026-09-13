@@ -74,6 +74,42 @@ svc.refresh(["SPY"])                                # re-download; keeps old dat
 
 Every method defaults to the full universe. Use `align="outer"` to keep each fund's full history (older funds start before VTIP's 2012 inception). A data source other than yfinance can be plugged in by implementing `MarketDataConnector` (`portfolio_builder/market_data/connectors/base.py`).
 
+## Portfolio optimization
+
+`portfolio_builder/optimization` turns a client profile into a portfolio. A profile is an age plus a **risk tolerance from 1 (most conservative) to 10 (most aggressive)**. Expected returns and covariance are estimated from the cached monthly total returns over the window where all funds have data, then annualized. Every portfolio is long-only (no shorting) and its weights sum to 1; results that break either rule are rejected.
+
+| Approach | How it allocates |
+|---|---|
+| `rule_based` | Equity % = 110 − age, shifted from −20 points (risk 1) to +20 points (risk 10) and kept between 10% and 100%. Equity is split 55% US large-cap / 25% international developed / 10% emerging / 10% REITs. The rest is split 70% aggregate bonds / 20% TIPS / 10% cash. Within each asset class, the tickers are ranked by historical volatility: conservative clients hold the calmer fund, aggressive clients the more volatile one, and clients in between get a blend. |
+| `mean_variance` | Builds the long-only efficient frontier with `scipy.optimize.minimize` (SLSQP). The client portfolio has the highest return for a target volatility, placed by risk tolerance between the minimum-volatility portfolio (risk 1) and the maximum-return portfolio (risk 10). Other objectives: `max_sharpe`, `min_volatility`, `target_volatility`, `target_return`. The result also includes the frontier and the min-volatility, max-Sharpe and max-return reference portfolios. |
+
+Cash (shown as `CASH`) earns the risk-free rate, default 4%, at zero volatility. Only the rule-based approach holds it.
+
+```python
+from portfolio_builder.optimization import InvestorProfile, get_optimization_engine
+
+engine = get_optimization_engine(risk_free_rate=0.04)
+profile = InvestorProfile(age=40, risk_tolerance=6)
+
+rule = engine.optimize("rule_based", profile)
+mvo = engine.optimize("mean_variance", profile)
+mvo.weights, mvo.metrics, mvo.asset_class_weights
+mvo.frontier.points                                   # expected_return, volatility, sharpe_ratio
+mvo.reference_portfolios["max_sharpe"].weights
+engine.optimize("mean_variance", profile, objective="target_volatility", target=0.10, max_weight=0.4)
+engine.compare(profile)                               # all registered approaches
+```
+
+To add a new approach (e.g. risk parity), subclass `AllocationStrategy`, implement `allocate(profile, inputs)`, and call `engine.register(...)`.
+
+```bash
+python -m portfolio_builder.optimization --age 40 --risk 6                       # both approaches
+python -m portfolio_builder.optimization --age 30 --risk 8 --method mean_variance --frontier
+python -m portfolio_builder.optimization --age 55 --risk 4 --method mean_variance --objective max_sharpe
+```
+
+Unconstrained mean-variance results depend heavily on the historical sample. Since 2012, SPY has had the best return and Sharpe ratio, so the frontier is mostly SPY blended with short-term TIPS. Use `max_weight` (or `--lookback-years`) for more diversified portfolios.
+
 ## Tests
 
 ```bash
