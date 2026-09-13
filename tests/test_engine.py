@@ -77,3 +77,9 @@ def test_insufficient_history_raises(tmp_path):
     engine = PortfolioOptimizationEngine(market_data=service)
     with pytest.raises(OptimizationError, match="observations"):
         engine.optimize("mean_variance", PROFILE)
+
+
+def test_default_risk_free_rate_is_zero(tmp_path):
+    service = MarketDataService(LongHistoryConnector(), ParquetCache(tmp_path / "rf"))
+    engine = PortfolioOptimizationEngine(market_data=service)
+    assert engine.risk_free_rate == 0.0 and engine.market_inputs().risk_free_rate == 0.0

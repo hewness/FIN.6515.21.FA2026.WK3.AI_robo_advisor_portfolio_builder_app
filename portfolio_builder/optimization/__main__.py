@@ -13,6 +13,7 @@ import sys
 import pandas as pd
 
 from .engine import get_optimization_engine
+from .inputs import DEFAULT_RISK_FREE_RATE
 from .mean_variance import OBJECTIVES
 from .models import AllocationResult, InvestorProfile
 
@@ -53,7 +54,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--method", default="all", help="rule_based, mean_variance, or all (default)")
     parser.add_argument("--objective", choices=OBJECTIVES, help="Mean-variance objective (default: risk_tolerance)")
     parser.add_argument("--target", type=float, help="Target for target_volatility / target_return, e.g. 0.10")
-    parser.add_argument("--risk-free-rate", type=float, default=0.04)
+    parser.add_argument("--risk-free-rate", type=float, default=DEFAULT_RISK_FREE_RATE,
+                        help="Return on cash and Sharpe risk-free rate (default 0)")
     parser.add_argument("--lookback-years", type=float)
     parser.add_argument("--frontier", action="store_true", help="Print a sample of the efficient frontier")
     args = parser.parse_args(argv)

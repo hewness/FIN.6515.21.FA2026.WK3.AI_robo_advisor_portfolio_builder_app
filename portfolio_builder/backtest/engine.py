@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from ..market_data import MarketDataService
+from ..optimization.inputs import DEFAULT_RISK_FREE_RATE
 from ..optimization.models import CASH
 from ..universe import get_history_proxies
 
@@ -28,7 +29,7 @@ class BacktestConfig:
     years: int = 10
     rebalance: Rebalance = "quarterly"
     benchmark: str = "SPY"
-    risk_free_rate: float = 0.04
+    risk_free_rate: float = DEFAULT_RISK_FREE_RATE
     use_proxies: bool = True
 
     def __post_init__(self) -> None:

@@ -14,7 +14,8 @@ from .models import CASH, PortfolioMetrics
 
 PERIODS_PER_YEAR = {"daily": 252, "weekly": 52, "monthly": 12}
 MIN_OBSERVATIONS = 24
-DEFAULT_RISK_FREE_RATE = 0.04
+# Return on cash, also used as the Sharpe ratio's risk-free rate: 0% (cash earns nothing, Sharpe = return / vol).
+DEFAULT_RISK_FREE_RATE = 0.0
 
 
 @dataclass(frozen=True)

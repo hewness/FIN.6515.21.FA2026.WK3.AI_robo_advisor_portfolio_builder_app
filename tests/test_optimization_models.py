@@ -90,3 +90,18 @@ def test_inputs_from_returns_annualizes():
 
     with pytest.raises(OptimizationError):
         MarketInputs.from_returns(returns.iloc[:10])
+
+
+def test_cash_returns_zero_by_default():
+    from portfolio_builder.backtest import BacktestConfig
+    from portfolio_builder.optimization.inputs import DEFAULT_RISK_FREE_RATE
+
+    assert DEFAULT_RISK_FREE_RATE == 0.0
+    assert BacktestConfig().risk_free_rate == 0.0
+    tickers = ["VTI", "BND"]
+    inputs = MarketInputs(pd.Series([0.10, 0.03], index=tickers),
+                          pd.DataFrame([[0.04, 0.002], [0.002, 0.0025]], index=tickers, columns=tickers))
+    assert inputs.risk_free_rate == 0.0
+    m = portfolio_metrics(pd.Series({"VTI": 0.5, CASH: 0.5}), inputs)
+    assert m.expected_return == pytest.approx(0.05)        # cash adds nothing
+    assert m.sharpe_ratio == pytest.approx(0.05 / 0.10)    # Sharpe = return / volatility

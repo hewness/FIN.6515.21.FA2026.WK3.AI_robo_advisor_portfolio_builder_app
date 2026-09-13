@@ -62,7 +62,7 @@ Invalid inputs are listed in a red status box in the sidebar, and the charts kee
 - The efficient frontier is a dashed sky-blue line, a color not used by any portfolio or asset class.
 
 **Backtest method** (`portfolio_builder/backtest`):
-- Daily total returns with fixed target weights. Holdings drift and reset at each rebalance date. Cash earns the risk-free rate.
+- Daily total returns with fixed target weights. Holdings drift and reset at each rebalance date. Cash earns the risk-free rate (0% by default).
 - Before a fund existed, an older ETF tracking the same asset class stands in: VTI→SPY, VXUS→EFA, VWO→EEM, BND→AGG, VTIP→TIP (`HISTORY_PROXIES` in `universe.py`). These history proxies are used only to extend the backtest; they are never recommended or held, and the backtest notes list where they were used.
 - It models the initial investment only, with no contributions, fees or taxes.
 - Mean-variance weights are estimated on overlapping history, so that backtest is in-sample.
@@ -140,12 +140,12 @@ Every method defaults to the full universe. Use `align="outer"` to keep each fun
 | `rule_based` | Equity % = 110 − age, shifted from −20 points (risk 1) to +20 points (risk 10) and kept between 10% and 100%. Equity is split 55% US large-cap / 25% international developed / 10% emerging / 10% REITs. The rest is split 70% aggregate bonds / 20% TIPS / 10% cash. Each asset class's weight goes to its single fund. (If a class were given several funds, they would be ranked by historical volatility: conservative clients get the calmer fund, aggressive clients the more volatile one, and clients in between a blend.) |
 | `mean_variance` | Builds the long-only efficient frontier with `scipy.optimize.minimize` (SLSQP). The client portfolio has the highest return for a target volatility, placed by risk tolerance between the minimum-volatility portfolio (risk 1) and the maximum-return portfolio (risk 10). Other objectives: `max_sharpe`, `min_volatility`, `target_volatility`, `target_return`. The result also includes the frontier and the min-volatility, max-Sharpe and max-return reference portfolios. |
 
-Cash (shown as `CASH`) earns the risk-free rate, default 4%, at zero volatility. Only the rule-based approach holds it.
+Cash (shown as `CASH`) earns the risk-free rate, which defaults to **0%**, at zero volatility. The same rate is the Sharpe ratio's risk-free rate, so Sharpe = expected return ÷ volatility. Only the rule-based approach holds cash. Pass `risk_free_rate=` to the engine to change it.
 
 ```python
 from portfolio_builder.optimization import InvestorProfile, get_optimization_engine
 
-engine = get_optimization_engine(risk_free_rate=0.04)
+engine = get_optimization_engine()                    # risk_free_rate defaults to 0.0
 profile = InvestorProfile(age=40, risk_tolerance=6)
 
 rule = engine.optimize("rule_based", profile)
