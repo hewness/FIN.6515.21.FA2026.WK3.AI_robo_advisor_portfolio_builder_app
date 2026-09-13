@@ -10,11 +10,12 @@ from .base import AllocationStrategy
 from .inputs import DEFAULT_RISK_FREE_RATE, MarketInputs, build_market_inputs
 from .mean_variance import MeanVarianceStrategy
 from .models import AllocationResult, InvestorProfile
+from .research_informed import ResearchInformedStrategy
 from .rule_based import RuleBasedStrategy
 
 
 def default_strategies() -> list[AllocationStrategy]:
-    return [RuleBasedStrategy(), MeanVarianceStrategy()]
+    return [RuleBasedStrategy(), MeanVarianceStrategy(), ResearchInformedStrategy()]
 
 
 class PortfolioOptimizationEngine:

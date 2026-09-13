@@ -1,4 +1,4 @@
-"""Gradio dashboard: sidebar inputs, summary cards and charts for both recommended portfolios."""
+"""Gradio dashboard: sidebar inputs, summary cards and charts for the three recommended portfolios."""
 
 from __future__ import annotations
 
@@ -20,20 +20,20 @@ from ..universe import get_tickers
 from . import charts, components
 from .formatting import format_money, parse_money
 from .interactions import build_head
-from .theme import CSS, THEME
+from .theme import CSS, METHODS, THEME
 
 logger = logging.getLogger(__name__)
 
 INPUT_FIELDS = ("risk_tolerance", "horizon_years", "initial_investment", "monthly_contribution", "goal",
-                "target_amount", "age", "backtest_years", "rebalance", "hump_glide_path")
-METHODS = ("rule_based", "mean_variance")
+                "target_amount", "age", "backtest_years", "rebalance", "hump_glide_path",
+                "annual_income", "retirement_income", "retirement_age")
 CARD_PARTS = ("header", "donut", "table", "wealth")
 OUTPUT_KEYS = (
     "status", "chips",
     *(f"{part}_{method}" for method in METHODS for part in CARD_PARTS),
-    "scatter", "backtest_caption", "backtest", "notes",
+    "insight", "scatter", "backtest_caption", "backtest", "notes",
 )
-MONEY_FIELDS = ("initial_investment", "monthly_contribution", "target_amount")
+MONEY_FIELDS = ("initial_investment", "monthly_contribution", "target_amount", "annual_income", "retirement_income")
 # Tall enough for the largest possible portfolio (every universe fund + cash) at 36px rows + header,
 # so tables never scroll.
 MAX_HOLDINGS = len(get_tickers()) + 1
@@ -48,7 +48,15 @@ def sidebar_tooltips() -> dict[str, str]:
     presets = ", ".join(f"{label} {score:g}" for label, score in PRESETS.items())
     goal_defaults = ", ".join(f"{c['label']} {format_money(c['default_target'])}" for c in opts["goal"]["choices"])
     return {
-        "in-age": "Your current age (18–80). Used in the lifecycle rule: equity share starts at 110 − age.",
+        "in-age": ("Your current age (18–80). Sets the lifecycle glide path, and how many years of future income "
+                   "the research-informed model counts."),
+        "in-income": ("Your yearly earnings before retirement ($0 – $5,000,000); enter $0 if retired. The "
+                      "research-informed model treats future earnings as a bond-like asset (human capital): the "
+                      "more of it you have relative to savings, the more stock your portfolio can hold."),
+        "in-retire-income": (f"Expected Social Security and pensions per year in retirement ($0 – $1,000,000). "
+                             f"Leave blank to use {opts['retirement_income']['default_rate']:.0%} of annual income. "
+                             "Counts toward human capital, so retirees with pension income can hold more stock."),
+        "in-retire-age": "Age when retirement income replaces your earnings (50–75).",
         "in-goal": "What you are investing for. It adds context to the recommendation and sets a default goal target.",
         "in-target": ("What you want the portfolio to be worth at the end of your horizon ($1,000 – $100,000,000). "
                       f"Used for the goal probability. Defaults: {goal_defaults}."),
@@ -61,7 +69,7 @@ def sidebar_tooltips() -> dict[str, str]:
         "in-monthly": "Ongoing savings added each month ($0 – $50,000).",
         "in-horizon": ("How long you plan to invest (1–30 years). Longer horizons allow more risk: under 3 years "
                        "caps risk at 3, 3–4 years −2, 5–9 years −1, 20+ years +1."),
-        "in-lookback": "How many years of history (10–20) to test both allocations against the S&P 500.",
+        "in-lookback": "How many years of history (10–20) to test all three allocations against the S&P 500.",
         "in-rebalance": "How often the backtest resets holdings to their target weights.",
     }
 
@@ -120,6 +128,7 @@ class Dashboard:
             values_by_key[f"donut_{method}"] = charts.allocation_donut(resp, method)
             values_by_key[f"table_{method}"] = components.holdings_table(resp, method)
             values_by_key[f"wealth_{method}"] = charts.wealth_projection(resp, method, y_max)
+        values_by_key["insight"] = components.research_insight_card(resp)
         return tuple(values_by_key[key] for key in OUTPUT_KEYS)
 
 
@@ -143,6 +152,15 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
             target = gr.Textbox(label="Goal target", value=format_money(defaults["target_amount"]), max_lines=1,
                                 placeholder="$1,500,000", elem_id="in-target",
                                 elem_classes=["money-input", "inline-field"])
+
+            gr.Markdown("### Income", elem_classes="sb-section")
+            income = gr.Textbox(label="Annual income", value=format_money(defaults["annual_income"]), max_lines=1,
+                                placeholder="$85,000", elem_id="in-income", elem_classes=["money-input", "inline-field"])
+            retire_income = gr.Textbox(label="Retirement income", value=format_money(defaults["retirement_income"]),
+                                       max_lines=1, placeholder="Auto (40%)", elem_id="in-retire-income",
+                                       elem_classes=["money-input", "inline-field"])
+            retire_age = gr.Number(label="Retirement age", value=defaults["retirement_age"], precision=0,
+                                   minimum=50, maximum=75, elem_id="in-retire-age", elem_classes="inline-field")
 
             gr.Markdown("### Risk profile", elem_classes="sb-section")
             glide = gr.Checkbox(label="Hump-shaped equity glide path", value=defaults["hump_glide_path"],
@@ -174,43 +192,47 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
         # ---------------- Main panel: results ----------------
         gr.HTML(
             "<div id='app-header'><h1>AI Robo-Advisor Portfolio Builder</h1>"
-            "<p>A rule-based lifecycle portfolio and a mean-variance optimized portfolio, built from "
-            f"{len(get_tickers())} ETFs (one per asset class) plus cash and compared side by side. Adjust the inputs "
-            "in the sidebar; the dashboard updates automatically.</p></div>"
+            "<p>Three portfolios built from "
+            f"{len(get_tickers())} ETFs (one per asset class) plus cash and compared side by side: a rule-based "
+            "lifecycle portfolio, a mean-variance optimized portfolio, and a research-informed portfolio whose equity "
+            "share depends on your income and savings, not just your age. Adjust the inputs in the sidebar; the "
+            "dashboard updates automatically.</p></div>"
         )
         chips = gr.HTML()
 
-        # One card per portfolio: KPI tiles; allocation donut beside holdings; projected wealth.
+        # One card per portfolio, side by side; inside each card the panels stack: KPI tiles, allocation donut,
+        # holdings, projected wealth. Cards wrap under each other on narrow screens.
         cards: dict[str, dict[str, Any]] = {}
         with gr.Row(equal_height=True):
             for method in METHODS:
-                with gr.Column(elem_classes=["portfolio-card", f"portfolio-card-{method}"], min_width=520):
+                with gr.Column(elem_classes=["portfolio-card", f"portfolio-card-{method}"], min_width=340):
                     header = gr.HTML()
-                    with gr.Row():
-                        with gr.Column(scale=4, min_width=220):
-                            gr.Markdown("Allocation by Asset Class", elem_classes="card-subtitle")
-                            donut = gr.Plot(show_label=False, container=False, elem_classes="donut-plot")
-                        with gr.Column(scale=6, min_width=300):
-                            gr.Markdown("Holdings", elem_classes="card-subtitle")
-                            table = gr.Dataframe(show_label=False, interactive=False, max_height=HOLDINGS_TABLE_HEIGHT,
-                                                 datatype=components.HOLDINGS_DATATYPES,
-                                                 column_widths=["6%", "18%", "32%", "21%", "23%"],
-                                                 elem_classes="holdings-table")
+                    gr.Markdown("Allocation by Asset Class", elem_classes="card-subtitle")
+                    donut = gr.Plot(show_label=False, container=False, elem_classes="donut-plot")
+                    gr.Markdown("Holdings", elem_classes="card-subtitle")
+                    table = gr.Dataframe(show_label=False, interactive=False, max_height=HOLDINGS_TABLE_HEIGHT,
+                                         datatype=components.HOLDINGS_DATATYPES,
+                                         column_widths=["7%", "17%", "34%", "19%", "23%"],
+                                         elem_classes="holdings-table")
                     gr.Markdown("Projected Wealth", elem_classes="card-subtitle")
                     gr.Markdown("Expected (mean), optimistic (75th pct) and pessimistic (25th pct) value from "
-                                "5,000 simulations, including monthly contributions. Same scale in both cards.",
+                                "5,000 simulations, including monthly contributions. Same scale in all cards.",
                                 elem_classes="section-caption")
                     wealth = gr.Plot(show_label=False, container=False, elem_classes="wealth-plot")
                 cards[method] = {"header": header, "donut": donut, "table": table, "wealth": wealth}
 
-        # Charts that plot both portfolios together.
+        # Where the research-informed model departs from popular rules of thumb, and why.
+        with gr.Column(elem_classes="insight-card"):
+            insight = gr.HTML()
+
+        # Charts that plot all portfolios together.
         with gr.Column(elem_classes="comparison-card"):
             gr.HTML(components.comparison_header())
             with gr.Row(equal_height=True):
                 with gr.Column(elem_classes="chart-card", min_width=460):
                     gr.Markdown("### Risk vs. Return", elem_classes="section-title")
-                    gr.Markdown("Annualized expected return vs. volatility for each asset class, cash and both "
-                                "portfolios, with the efficient frontier.", elem_classes="section-caption")
+                    gr.Markdown("Annualized expected return vs. volatility for each asset class, cash and all "
+                                "three portfolios, with the efficient frontier.", elem_classes="section-caption")
                     scatter = gr.Plot(show_label=False, container=False)
                 with gr.Column(elem_classes="chart-card", min_width=460):
                     gr.Markdown("### Historical Backtest vs. S&P 500", elem_classes="section-title")
@@ -221,11 +243,13 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
             notes = gr.Markdown()
 
         # ---------------- Events ----------------
-        inputs = [risk, horizon, initial, monthly, goal, target, age, backtest_years, rebalance, glide]
+        inputs = [risk, horizon, initial, monthly, goal, target, age, backtest_years, rebalance, glide,
+                  income, retire_income, retire_age]
         components_by_key = {
             "status": status, "chips": chips,
             **{f"{part}_{m}": cards[m][part] for m in METHODS for part in CARD_PARTS},
-            "scatter": scatter, "backtest_caption": bt_caption, "backtest": backtest, "notes": notes,
+            "insight": insight, "scatter": scatter, "backtest_caption": bt_caption, "backtest": backtest,
+            "notes": notes,
         }
         outputs = [components_by_key[key] for key in OUTPUT_KEYS]
         run = dict(fn=dashboard.update, inputs=inputs, outputs=outputs, show_progress="minimal")
@@ -233,12 +257,13 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
         gr.on(
             triggers=[risk.release, horizon.release, backtest_years.release, rebalance.input, glide.input,
                       initial.blur, initial.submit, monthly.blur, monthly.submit,
-                      target.blur, target.submit, age.blur, age.submit],
+                      target.blur, target.submit, age.blur, age.submit, income.blur, income.submit,
+                      retire_income.blur, retire_income.submit, retire_age.blur, retire_age.submit],
             trigger_mode="always_last",
             **run,
         )
         # Normalize money text ("50k", "50000") to "$50,000" when the field is left; typing is formatted in the browser.
-        for money_box in (initial, monthly, target):
+        for money_box in (initial, monthly, target, income, retire_income):
             gr.on([money_box.blur, money_box.submit], format_money, inputs=money_box, outputs=money_box,
                   show_progress="hidden", queue=False)
         risk.release(preset_for, inputs=risk, outputs=risk_preset, show_progress="hidden")
@@ -254,9 +279,10 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
             return (preset_for(d["risk_tolerance"]), d["risk_tolerance"], d["horizon_years"],
                     format_money(d["initial_investment"]), format_money(d["monthly_contribution"]), d["goal"],
                     format_money(d["target_amount"]), d["age"], d["backtest_years"], d["rebalance"],
-                    d["hump_glide_path"])
+                    d["hump_glide_path"], format_money(d["annual_income"]), format_money(d["retirement_income"]),
+                    d["retirement_age"])
 
-        reset.click(reset_values, outputs=[risk_preset, *inputs[:5], target, age, backtest_years, rebalance, glide],
+        reset.click(reset_values, outputs=[risk_preset, *inputs],
                     show_progress="hidden").then(**run)
         demo.load(**run)
 

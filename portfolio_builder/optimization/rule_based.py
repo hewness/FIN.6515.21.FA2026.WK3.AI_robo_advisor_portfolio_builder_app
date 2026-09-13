@@ -44,11 +44,7 @@ class RuleBasedConfig:
     def __post_init__(self) -> None:
         if not 0.0 <= self.min_equity <= self.max_equity <= 1.0:
             raise ValueError("Require 0 <= min_equity <= max_equity <= 1")
-        for label, sleeve in (("equity_sleeve", self.equity_sleeve), ("defensive_sleeve", self.defensive_sleeve)):
-            if any(v < 0 for v in sleeve.values()) or not math.isclose(sum(sleeve.values()), 1.0, abs_tol=1e-9):
-                raise ValueError(f"{label} weights must be non-negative and sum to 1")
-            for key in sleeve:
-                get_asset_class(key)  # raises KeyError for unknown asset classes
+        validate_sleeves(equity_sleeve=self.equity_sleeve, defensive_sleeve=self.defensive_sleeve)
 
 
 class RuleBasedStrategy(AllocationStrategy):
@@ -64,24 +60,9 @@ class RuleBasedStrategy(AllocationStrategy):
 
     def allocate(self, profile: InvestorProfile, inputs: MarketInputs) -> AllocationResult:
         equity, shift = self.equity_fraction(profile)
-        class_weights: dict[str, float] = {}
-        for key, share in self.config.equity_sleeve.items():
-            class_weights[key] = class_weights.get(key, 0.0) + equity * share
-        for key, share in self.config.defensive_sleeve.items():
-            class_weights[key] = class_weights.get(key, 0.0) + (1.0 - equity) * share
-
-        weights: dict[str, float] = {}
-        ticker_order: dict[str, list[str]] = {}
-        for key, class_weight in class_weights.items():
-            if class_weight <= 0:
-                continue
-            if key == "cash":
-                weights[CASH] = weights.get(CASH, 0.0) + class_weight
-                continue
-            order, split = select_tickers(key, profile.risk_fraction, inputs)
-            ticker_order[key] = order
-            for ticker, fraction in split.items():
-                weights[ticker] = weights.get(ticker, 0.0) + class_weight * fraction
+        class_weights, weights, ticker_order = sleeve_weights(
+            equity, self.config.equity_sleeve, self.config.defensive_sleeve, profile.risk_fraction, inputs
+        )
 
         series = pd.Series(weights, dtype="float64")
         return AllocationResult(
@@ -100,6 +81,47 @@ class RuleBasedStrategy(AllocationStrategy):
                 "risk_free_rate": inputs.risk_free_rate,
             },
         )
+
+
+def sleeve_weights(
+    equity: float,
+    equity_sleeve: dict[str, float],
+    defensive_sleeve: dict[str, float],
+    risk_fraction: float,
+    inputs: MarketInputs,
+) -> tuple[dict[str, float], dict[str, float], dict[str, list[str]]]:
+    """Split ``equity`` across the equity sleeve and the rest across the defensive sleeve.
+
+    Returns (asset class weights, ticker weights, tickers per asset class ordered by volatility).
+    """
+    class_weights: dict[str, float] = {}
+    for key, share in equity_sleeve.items():
+        class_weights[key] = class_weights.get(key, 0.0) + equity * share
+    for key, share in defensive_sleeve.items():
+        class_weights[key] = class_weights.get(key, 0.0) + (1.0 - equity) * share
+
+    weights: dict[str, float] = {}
+    ticker_order: dict[str, list[str]] = {}
+    for key, class_weight in class_weights.items():
+        if class_weight <= 0:
+            continue
+        if key == "cash":
+            weights[CASH] = weights.get(CASH, 0.0) + class_weight
+            continue
+        order, split = select_tickers(key, risk_fraction, inputs)
+        ticker_order[key] = order
+        for ticker, fraction in split.items():
+            weights[ticker] = weights.get(ticker, 0.0) + class_weight * fraction
+    return class_weights, weights, ticker_order
+
+
+def validate_sleeves(**sleeves: dict[str, float]) -> None:
+    """Sleeve weights must be non-negative, sum to 1 and name known asset classes."""
+    for label, sleeve in sleeves.items():
+        if any(v < 0 for v in sleeve.values()) or not math.isclose(sum(sleeve.values()), 1.0, abs_tol=1e-9):
+            raise ValueError(f"{label} weights must be non-negative and sum to 1")
+        for key in sleeve:
+            get_asset_class(key)  # raises KeyError for unknown asset classes
 
 
 def select_tickers(asset_class_key: str, risk_fraction: float, inputs: MarketInputs) -> tuple[list[str], dict[str, float]]:

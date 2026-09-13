@@ -9,9 +9,11 @@ from typing import Any, Literal
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from ..optimization.models import DEFAULT_REPLACEMENT_RATE
 from .risk import MAX_RISK, MIN_RISK, RISK_LABELS, RiskLevel, resolve_risk_tolerance
 
-Method = Literal["rule_based", "mean_variance"]
+Method = Literal["rule_based", "mean_variance", "research_informed"]
+METHODS: tuple[str, ...] = ("rule_based", "mean_variance", "research_informed")
 RebalanceFrequency = Literal["monthly", "quarterly", "annual"]
 
 
@@ -90,6 +92,21 @@ class PortfolioRequest(BaseModel):
         description="On: equity rises to ~80% at mid-life and eases to ~60% at retirement. Off: 110 - age.",
         json_schema_extra={"widget": "checkbox"},
     )
+    annual_income: float = Field(
+        default=85_000, ge=0, le=5_000_000, title="Annual income ($)",
+        description="Current yearly earnings before retirement (0 if retired). Part of human capital.",
+        json_schema_extra={"widget": "number", "step": 1_000},
+    )
+    retirement_income: float | None = Field(
+        default=None, ge=0, le=1_000_000, title="Retirement income ($/yr)",
+        description="Expected Social Security and pensions per year in retirement (defaults to 40% of income).",
+        json_schema_extra={"widget": "number", "step": 1_000},
+    )
+    retirement_age: int = Field(
+        default=67, ge=50, le=75, title="Retirement age",
+        description="Age when retirement income replaces earnings.",
+        json_schema_extra={"widget": "number", "step": 1},
+    )
 
     @field_validator("risk_tolerance", mode="before")
     @classmethod
@@ -118,7 +135,7 @@ class PortfolioRequest(BaseModel):
     def _parse_rebalance(cls, value: Any) -> Any:
         return value.strip().lower() if isinstance(value, str) else value
 
-    @field_validator("target_amount", mode="before")
+    @field_validator("target_amount", "retirement_income", mode="before")
     @classmethod
     def _blank_target(cls, value: Any) -> Any:
         return None if value in ("", None) else value
@@ -127,6 +144,17 @@ class PortfolioRequest(BaseModel):
     def risk_score(self) -> float:
         """Risk tolerance as a 1-10 number (labels resolved)."""
         return resolve_risk_tolerance(self.risk_tolerance)
+
+    @property
+    def is_retired(self) -> bool:
+        return self.age >= self.retirement_age
+
+    @property
+    def resolved_retirement_income(self) -> float:
+        """Retirement income, or 40% of annual income when none was entered."""
+        if self.retirement_income is not None:
+            return self.retirement_income
+        return DEFAULT_REPLACEMENT_RATE * self.annual_income
 
     @property
     def resolved_target(self) -> float:
@@ -160,6 +188,9 @@ def get_form_options() -> dict[str, dict[str, Any]]:
         elif name == "target_amount":
             entry["default"] = PortfolioRequest.model_fields["goal"].default.default_target
             entry["minimum"], entry["maximum"] = 1_000, 100_000_000
+        elif name == "retirement_income":
+            entry["minimum"], entry["maximum"] = 0, 1_000_000
+            entry["default_rate"] = DEFAULT_REPLACEMENT_RATE
         elif name == "rebalance":
             entry["choices"] = [{"value": v, "label": v.capitalize()} for v in ("monthly", "quarterly", "annual")]
         options[name] = entry
@@ -179,6 +210,11 @@ class ProfileSummary(BaseModel):
     horizon_adjustment: str
     glide_path: str = "Linear (110 − age)"
     equity_target: float | None = None
+    annual_income: float = 0.0
+    retirement_income: float = 0.0
+    retirement_age: int = 67
+    human_capital: float | None = None
+    research_equity_target: float | None = None
 
 
 class MarketDataSummary(BaseModel):
@@ -297,6 +333,7 @@ class EfficientFrontierData(BaseModel):
     reference_portfolios: list[ReferencePortfolio]
     client_point: PortfolioPoint
     rule_based_point: PortfolioPoint
+    research_informed_point: PortfolioPoint | None = None
     asset_class_points: list[AssetClassPoint] = Field(default_factory=list)
     label: str = "Efficient frontier"
 
@@ -318,9 +355,11 @@ class BacktestPoint(BaseModel):
     date: str
     rule_based: float
     mean_variance: float
+    research_informed: float
     benchmark: float
     rule_based_drawdown: float
     mean_variance_drawdown: float
+    research_informed_drawdown: float
     benchmark_drawdown: float
 
 
@@ -345,13 +384,34 @@ class BacktestData(BaseModel):
     notes: list[str]
 
 
+class EquityComparison(BaseModel):
+    """An equity share to compare against the research-informed model (a portfolio or a popular rule)."""
+
+    key: str  # a method key, or "age_rule" / "target_date_fund"
+    label: str
+    equity: float
+
+
+class ResearchInsight(BaseModel):
+    """Where the research-informed model disagrees with popular advice, and why."""
+
+    equity: float
+    popular_equity: float  # the popular age rule of thumb (100 - age)
+    comparisons: list[EquityComparison]
+    headline: str
+    points: list[str]
+    sources: list[str]
+
+
 class PortfolioResponse(BaseModel):
     request: PortfolioRequest
     profile: ProfileSummary
     market_data: MarketDataSummary
     rule_based: PortfolioRecommendation
     mean_variance: PortfolioRecommendation
+    research_informed: PortfolioRecommendation
     efficient_frontier: EfficientFrontierData
+    research_insight: ResearchInsight
     backtest: BacktestData
     notes: list[str]
     warnings: list[str] = Field(default_factory=list)
@@ -361,11 +421,9 @@ class PortfolioResponse(BaseModel):
         return self.model_dump(mode="json")
 
     def recommendation(self, method: Method) -> PortfolioRecommendation:
-        if method == "rule_based":
-            return self.rule_based
-        if method == "mean_variance":
-            return self.mean_variance
-        raise ValueError("method must be 'rule_based' or 'mean_variance'")
+        if method in METHODS:
+            return getattr(self, method)
+        raise ValueError(f"method must be one of {', '.join(repr(m) for m in METHODS)}")
 
     # DataFrame helpers for UI tables and charts.
     def holdings_frame(self, method: Method) -> pd.DataFrame:
@@ -392,7 +450,7 @@ class PortfolioResponse(BaseModel):
 
     def comparison_frame(self) -> pd.DataFrame:
         rows = []
-        for rec in (self.rule_based, self.mean_variance):
+        for rec in (self.rule_based, self.mean_variance, self.research_informed):
             rows.append({
                 "method": rec.method,
                 "title": rec.title,

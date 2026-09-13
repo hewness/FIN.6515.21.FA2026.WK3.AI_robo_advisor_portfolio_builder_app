@@ -7,11 +7,18 @@ from html import escape
 import pandas as pd
 
 from ..service import PortfolioResponse
+from ..service.research_insights import equity_share, money
 from ..service.schemas import PortfolioRecommendation
 from .charts import _money_short
-from .theme import ASSET_CLASS_COLORS, ASSET_CLASS_SHORT, METHOD_COLORS, METHOD_LABELS, METHOD_TITLES
-
-METHODS = ("rule_based", "mean_variance")
+from .theme import (
+    ASSET_CLASS_COLORS,
+    ASSET_CLASS_SHORT,
+    METHOD_COLORS,
+    METHOD_LABELS,
+    METHOD_TITLES,
+    METHODS,
+    POPULAR_RULE_COLOR,
+)
 HOLDINGS_COLUMNS = [" ", "Ticker", "Asset class", "Weight", "Amount"]
 HOLDINGS_DATATYPES = ["html", "str", "str", "str", "str"]
 
@@ -54,11 +61,40 @@ def _card(resp: PortfolioResponse, method: str) -> str:
               _probability_class(prob)),
     ]
     color = METHOD_COLORS[method]
+    basis, basis_tip = equity_basis(resp, method)
     return (
         f"<div class='card-head'><span class='name' style='color:{color}'>{escape(rec.title)}</span>"
-        f"<span class='desc' title='{escape(rec.description)}'>{escape(rec.description)}</span></div>"
+        f"<span class='desc' title='{escape(rec.description)}'>{escape(rec.description)}</span>"
+        f"<span class='basis' title='{escape(basis_tip)}'>{escape(basis)}</span></div>"
         f"<div class='tiles'>{''.join(tiles)}</div>"
     )
+
+
+def equity_basis(resp: PortfolioResponse, method: str) -> tuple[str, str]:
+    """A short line on how the card's equity share was set, and a longer hover explanation.
+
+    Every card shows the line in the same position, which keeps the three cards aligned.
+    """
+    rec = resp.recommendation(method)
+    d = rec.details
+    if method == "research_informed":
+        h, w = money(d["human_capital"]), money(d["financial_wealth"])
+        capped = ", capped at 100%" if d.get("unclipped_equity_pct", 0) > 1 else ""
+        return (f"Equity {d['merton_share']:.0%} × (1 + {h} ÷ {w}) → {d['equity_pct']:.0%}",
+                f"Merton share {d['merton_share']:.0%} × (1 + {h} human capital ÷ {w} savings) = "
+                f"{d['equity_pct']:.0%} equity{capped}")
+    if method == "rule_based":
+        glide = resp.profile.glide_path
+        short = "hump glide path" if glide.lower().startswith("hump") else "110 − age rule"
+        return (f"Equity {d['equity_pct']:.0%} · {short} at age {resp.request.age}",
+                f"{glide} glide path at age {resp.request.age}, shifted by risk tolerance")
+    band = d.get("equity_band")
+    if band:
+        equity = d.get("equity_weight", equity_share(rec))
+        return (f"Equity {equity:.0%} · kept within {band[0]:.0%}–{band[1]:.0%}",
+                f"Equity funds held within ±5 points of the glide path's {d.get('equity_target', equity):.0%}")
+    equity = equity_share(rec)
+    return f"Equity {equity:.0%} · set by the frontier", "Equity share wherever the efficient frontier puts it (no age input)"
 
 
 def summary_header(resp: PortfolioResponse, method: str) -> str:
@@ -77,11 +113,13 @@ def profile_chips(resp: PortfolioResponse) -> str:
         f"⏳ <b>{p.horizon_years}</b> yr horizon",
         (f"📈 {escape(p.glide_path)} glide path · <b>{p.equity_target:.0%}</b> equity"
          if p.equity_target is not None else f"📈 {escape(p.glide_path)} glide path"),
+        (f"💼 Human capital <b>{money(p.human_capital)}</b>" if p.human_capital is not None else ""),
         f"🎚️ {risk} · {escape(p.risk_band)}",
         f"📅 Data as of <b>{escape(resp.market_data.data_as_of or '—')}</b>",
     ]
     title = escape(p.horizon_adjustment)
-    return "<div class='chips'>" + "".join(f"<span class='chip' title='{title}'>{c}</span>" for c in chips) + "</div>"
+    return ("<div class='chips'>" + "".join(f"<span class='chip' title='{title}'>{c}</span>" for c in chips if c)
+            + "</div>")
 
 
 def status_panel(errors: dict[str, str] | None = None, warnings: list[str] | None = None,
@@ -117,16 +155,47 @@ def holdings_table(resp: PortfolioResponse, method: str) -> pd.DataFrame:
 
 
 def comparison_header() -> str:
-    """Title for the container whose charts plot both portfolios together."""
-    rb, mv, bench = (METHOD_COLORS[k] for k in ("rule_based", "mean_variance", "benchmark"))
+    """Title for the container whose charts plot all portfolios together."""
+    vs = "<span class='vs'>vs</span>"
+    title = vs.join(f"<span style='color:{METHOD_COLORS[m]}'>{METHOD_LABELS[m]}</span>" for m in METHODS)
+    legend = " · ".join(f"<span class='swatch' style='background:{METHOD_COLORS[m]}'></span>{METHOD_TITLES[m]}"
+                        for m in METHODS)
+    bench = METHOD_COLORS["benchmark"]
     return (
         "<div class='comparison-head'>"
-        f"<div class='title'><span style='color:{rb}'>{METHOD_TITLES['rule_based']}</span>"
-        f"<span class='vs'>vs</span><span style='color:{mv}'>{METHOD_TITLES['mean_variance']}</span></div>"
-        "<div class='sub'>Both portfolios are plotted together in each chart: "
-        f"<span class='swatch' style='background:{rb}'></span>{METHOD_TITLES['rule_based']} · "
-        f"<span class='swatch' style='background:{mv}'></span>{METHOD_TITLES['mean_variance']} · "
+        f"<div class='title'>{title}</div>"
+        f"<div class='sub'>All three portfolios are plotted together in each chart: {legend} · "
         f"<span class='swatch dotted' style='color:{bench}'></span>{METHOD_TITLES['benchmark']} benchmark</div>"
+        "</div>"
+    )
+
+
+def research_insight_card(resp: PortfolioResponse) -> str:
+    """Equity share of each portfolio and popular rule, plus where and why the research model disagrees."""
+    insight = resp.research_insight
+    bars = []
+    for c in insight.comparisons:
+        main = c.key == "research_informed"
+        popular = c.key not in METHOD_COLORS
+        color = POPULAR_RULE_COLOR if popular else METHOD_COLORS[c.key]
+        css = "main" if main else "popular" if popular else ""
+        bars.append(
+            f"<div class='eq-bar {css}' data-key='{c.key}'><span class='lbl' title='{escape(c.label)}'>"
+            f"{escape(c.label)}</span><span class='track'><span class='fill' style='display:block;"
+            f"width:{max(c.equity, 0) * 100:.1f}%;background:{color}'></span></span>"
+            f"<span class='val'>{c.equity:.0%}</span></div>"
+        )
+    points = "".join(f"<li>{escape(point)}</li>" for point in insight.points)
+    sources = " · ".join(escape(s) for s in insight.sources)
+    return (
+        "<div class='insight'>"
+        "<div class='head'><div class='title'>Research vs. Popular Wisdom</div>"
+        f"<div class='sub'>{escape(insight.headline)}</div></div>"
+        f"<div><div class='bars-title'>Stock allocation at age {resp.request.age}</div>{''.join(bars)}"
+        "<div class='legend-note'>Gray bars are popular rules of thumb: 100 − age, and a typical target-date fund "
+        "glide path (as modeled by Duarte et al., 2022).</div></div>"
+        f"<div><div class='bars-title'>Where the research-informed model disagrees, and why</div>"
+        f"<ul class='points'>{points}</ul><div class='sources'>Sources: {sources}</div></div>"
         "</div>"
     )
 
@@ -140,7 +209,7 @@ def backtest_caption(resp: PortfolioResponse) -> str:
 
 def notes_markdown(resp: PortfolioResponse) -> str:
     md = resp.market_data
-    funds = {h.ticker: h.name for rec in (resp.rule_based, resp.mean_variance) for h in rec.holdings}
+    funds = {h.ticker: h.name for m in METHODS for h in resp.recommendation(m).holdings}
     sections = [
         "#### Recommendation notes",
         *[f"- {n}" for n in resp.notes],
@@ -156,6 +225,9 @@ def notes_markdown(resp: PortfolioResponse) -> str:
         f"- Projections use {resp.rule_based.projection.simulations:,} simulated return paths with monthly "
         "contributions added after each month's growth.",
         "- Mean-variance weights are estimated on history that overlaps the backtest, so its backtest is in-sample.",
+        "- The research-informed equity share uses long-run research assumptions (Practical Finance baseline: "
+        "4% log equity premium, 18.5% stock volatility, 2% real risk-free rate), not the historical estimates above; "
+        "risk tolerance 1–10 maps to relative risk aversion 10–4.",
         "- For education only; this is not investment advice.",
     ]
     return "\n".join(sections)

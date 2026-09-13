@@ -15,12 +15,12 @@ from .theme import (
     GRID_COLOR,
     METHOD_COLORS,
     METHOD_LABELS,
+    METHODS,
     METHOD_TITLES,
     MUTED_TEXT,
     TARGET_COLOR,
 )
 
-METHODS = ("rule_based", "mean_variance")
 COMPARISON_HEIGHT = 440  # risk/return and backtest charts sit side by side at the same height
 ASSET_CLASS_ORDER = [ac.name for ac in get_asset_classes()]
 
@@ -101,7 +101,7 @@ def allocation_donut(resp: PortfolioResponse, method: str) -> go.Figure:
 
 
 def risk_return_scatter(resp: PortfolioResponse) -> go.Figure:
-    """Asset classes, cash, the efficient frontier and both recommended portfolios in risk/return space."""
+    """Asset classes, cash, the efficient frontier and every recommended portfolio in risk/return space."""
     ef = resp.efficient_frontier
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -147,7 +147,7 @@ def risk_return_scatter(resp: PortfolioResponse) -> go.Figure:
 
 
 def wealth_y_max(resp: PortfolioResponse) -> float:
-    """Common y-axis top for both portfolios' projections so the two cards are directly comparable."""
+    """Common y-axis top for every portfolio's projection so the cards are directly comparable."""
     highs = [p.p75 for m in METHODS for p in resp.recommendation(m).projection.points]
     target = resp.rule_based.projection.target_amount or 0.0
     return max(max(highs), target) * 1.08
@@ -198,7 +198,7 @@ def backtest_chart(resp: PortfolioResponse) -> go.Figure:
     bt = resp.backtest
     dates = [p.date for p in bt.points]
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3], vertical_spacing=0.05)
-    for key in ("rule_based", "mean_variance", "benchmark"):
+    for key in (*METHODS, "benchmark"):
         color = METHOD_COLORS[key]
         label = METHOD_TITLES[key]
         width = 2 if key == "benchmark" else 2.5

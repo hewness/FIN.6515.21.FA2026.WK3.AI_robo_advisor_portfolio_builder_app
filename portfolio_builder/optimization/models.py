@@ -17,18 +17,36 @@ CASH = "CASH"
 MIN_AGE, MAX_AGE = 18, 100
 MIN_RISK, MAX_RISK = 1.0, 10.0
 WEIGHT_TOLERANCE = 1e-6
+# Retirement income as a share of final labor income when none is given (Practical Finance's low case).
+DEFAULT_REPLACEMENT_RATE = 0.40
 
 
 @dataclass(frozen=True)
 class InvestorProfile:
     age: int
     risk_tolerance: float  # 1 (most conservative) .. 10 (most aggressive)
+    # Income and wealth, used by the research-informed model (human capital); other models ignore them.
+    annual_income: float = 0.0  # current real labor income per year (0 if retired)
+    retirement_income: float | None = None  # Social Security + pensions per year; None = 40% of annual income
+    retirement_age: int = 67  # first age at which retirement income replaces labor income
+    financial_wealth: float | None = None  # investable financial wealth being allocated
 
     def __post_init__(self) -> None:
         if not MIN_AGE <= self.age <= MAX_AGE:
             raise ValueError(f"age must be between {MIN_AGE} and {MAX_AGE}, got {self.age}")
         if not MIN_RISK <= self.risk_tolerance <= MAX_RISK:
             raise ValueError(f"risk_tolerance must be between 1 and 10, got {self.risk_tolerance}")
+        if self.annual_income < 0 or (self.retirement_income is not None and self.retirement_income < 0):
+            raise ValueError("annual_income and retirement_income must be non-negative")
+        if self.financial_wealth is not None and self.financial_wealth <= 0:
+            raise ValueError(f"financial_wealth must be positive, got {self.financial_wealth}")
+
+    @property
+    def resolved_retirement_income(self) -> float:
+        """Retirement income, defaulting to ``DEFAULT_REPLACEMENT_RATE`` of annual income."""
+        if self.retirement_income is not None:
+            return float(self.retirement_income)
+        return DEFAULT_REPLACEMENT_RATE * self.annual_income
 
     @property
     def risk_fraction(self) -> float:

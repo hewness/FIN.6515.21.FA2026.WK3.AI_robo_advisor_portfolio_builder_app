@@ -42,10 +42,17 @@ def input_warnings(
             "double-check the horizon."
         )
 
-    if request.goal is FinancialGoal.RETIREMENT and request.age + request.horizon_years > RETIREMENT_AGE_WARNING:
+    if request.goal is FinancialGoal.RETIREMENT and not request.is_retired \
+            and request.age + request.horizon_years > RETIREMENT_AGE_WARNING:
         warnings.append(
             f"This horizon runs to age {request.age + request.horizon_years}. If you plan to retire earlier, "
             "shorten the horizon to your retirement date."
+        )
+
+    if request.annual_income == 0 and not request.is_retired:
+        warnings.append(
+            f"Annual income is $0 but you are younger than your retirement age ({request.retirement_age}). "
+            "Enter your earnings so the research-informed model can value your future income."
         )
 
     if profile.effective_risk_tolerance < profile.risk_tolerance and request.horizon_years < 3:
@@ -61,8 +68,11 @@ def build_notes(
     profile: ProfileSummary,
     rule_based: PortfolioRecommendation,
     mean_variance: PortfolioRecommendation,
+    research_informed: PortfolioRecommendation | None = None,
 ) -> list[str]:
     notes = [_goal_note(request, rule_based)]
+    if research_informed is not None:
+        notes.append(_research_note(research_informed))
 
     if request.hump_glide_path:
         base = rule_based.details.get("base_equity_pct")
@@ -105,6 +115,20 @@ def build_notes(
         "Projections are simulations based on historical estimates, not guarantees. Actual returns will differ."
     )
     return notes
+
+
+def _research_note(rec: PortfolioRecommendation) -> str:
+    d = rec.details
+    a = d.get("assumptions") or {}
+    capped = " (capped at 100%)" if d["unclipped_equity_pct"] > 1 else ""
+    return (
+        f"Research-informed: {d['merton_share']:.0%} Merton share (risk aversion {d['risk_aversion']:.1f}, "
+        f"{a.get('log_equity_premium', 0):.0%} equity premium, {a.get('equity_volatility', 0):.1%} stock volatility, "
+        f"{a.get('log_risk_free', 0):.0%} real rate) × (1 + ${d['human_capital']:,.0f} human capital ÷ "
+        f"${d['financial_wealth']:,.0f} savings) = {d['equity_pct']:.0%} equity{capped}. Human capital is future "
+        f"earnings plus ${d['retirement_income']:,.0f}/yr retirement income from age {d['retirement_age']}, "
+        "discounted with Practical Finance's age-varying rates."
+    )
 
 
 def _goal_note(request: PortfolioRequest, rule_based: PortfolioRecommendation) -> str:

@@ -14,7 +14,7 @@ from portfolio_builder.universe import get_tickers
 
 from .conftest import FakeConnector, LongHistoryConnector
 
-PROFILE = InvestorProfile(age=40, risk_tolerance=6)
+PROFILE = InvestorProfile(age=40, risk_tolerance=6, annual_income=80_000, financial_wealth=100_000)
 
 
 class EqualWeight(AllocationStrategy):
@@ -32,10 +32,11 @@ def engine(tmp_path):
 
 
 def test_default_methods_run_end_to_end(engine):
-    assert engine.available_methods() == ["rule_based", "mean_variance"]
+    assert engine.available_methods() == ["rule_based", "mean_variance", "research_informed"]
     rule = engine.optimize("rule_based", PROFILE)
     mvo = engine.optimize("mean_variance", PROFILE)
-    for result in (rule, mvo):
+    research = engine.optimize("research_informed", PROFILE)
+    for result in (rule, mvo, research):
         assert (result.weights >= 0).all() and result.weights.sum() == pytest.approx(1.0)
     assert set(mvo.weights.index) == set(get_tickers())
     assert mvo.frontier is not None and len(mvo.frontier) > 10
@@ -60,7 +61,7 @@ def test_strategy_options_and_ticker_subset(engine):
 def test_compare_and_custom_strategy(engine):
     engine.register(EqualWeight())
     results = engine.compare(PROFILE)
-    assert list(results) == ["rule_based", "mean_variance", "equal_weight"]
+    assert list(results) == ["rule_based", "mean_variance", "research_informed", "equal_weight"]
     assert results["equal_weight"].weights.nunique() == 1
     with pytest.raises(ValueError):
         engine.register(EqualWeight())

@@ -38,7 +38,7 @@ def test_profile_and_market_summary(response):
     assert md.observations >= 24 and md.risk_free_rate == 0.02 and md.data_as_of is not None
 
 
-@pytest.mark.parametrize("method", ["rule_based", "mean_variance"])
+@pytest.mark.parametrize("method", ["rule_based", "mean_variance", "research_informed"])
 def test_holdings_weights_and_amounts(response, method):
     rec = response.recommendation(method)
     assert rec.method == method
@@ -77,7 +77,7 @@ def test_dataframe_helpers(response):
     frontier = response.frontier_frame()
     assert {"expected_return", "volatility", "sharpe_ratio"} <= set(frontier.columns) and len(frontier) > 10
     comparison = response.comparison_frame()
-    assert list(comparison["method"]) == ["rule_based", "mean_variance"]
+    assert list(comparison["method"]) == ["rule_based", "mean_variance", "research_informed"]
     with pytest.raises(ValueError):
         response.holdings_frame("black_litterman")
 
@@ -143,14 +143,17 @@ def test_goal_probability_and_drawdown(response):
 
 def test_backtest_in_response(response):
     bt = response.backtest
-    assert set(bt.metrics) == {"rule_based", "mean_variance", "benchmark"}
+    assert set(bt.metrics) == {"rule_based", "mean_variance", "research_informed", "benchmark"}
+    assert bt.metrics["research_informed"].label == "Research-informed"
+    assert bt.points[0].research_informed == 250_000
+    assert response.research_informed.max_drawdown == bt.metrics["research_informed"].max_drawdown
     assert bt.metrics["benchmark"].label == "S&P 500 (SPY)" and bt.benchmark == "SPY"
     assert bt.initial_value == 250_000 and bt.rebalance == "quarterly" and bt.years_requested == 10
     assert bt.points[0].rule_based == 250_000 and bt.points[-1].date == bt.end
     assert any("years of history" in n for n in bt.notes)  # test data covers ~5 years
     assert response.rule_based.max_drawdown == bt.metrics["rule_based"].max_drawdown
     frame = response.backtest_frame()
-    assert list(frame.columns[:4]) == ["date", "rule_based", "mean_variance", "benchmark"]
+    assert list(frame.columns[:5]) == ["date", "rule_based", "mean_variance", "research_informed", "benchmark"]
     assert str(frame["date"].dtype).startswith("datetime64")
 
 
@@ -218,3 +221,69 @@ def test_toggle_off_matches_linear_models(portfolio_service):
     assert off.efficient_frontier.label == "Efficient frontier"
     assert "equity_band" not in off.mean_variance.details
     assert not any("Hump-shaped glide path" in n for n in off.notes)
+
+
+RETIREE = {
+    "risk_tolerance": "moderate",
+    "horizon_years": 20,
+    "initial_investment": 500_000,
+    "monthly_contribution": 0,
+    "goal": "retirement",
+    "age": 68,
+    "annual_income": 0,
+    "retirement_income": 30_000,
+}
+
+
+def test_research_informed_recommendation(response):
+    rec = response.research_informed
+    assert rec.method == "research_informed" and rec.title == "Research-informed Portfolio"
+    d = rec.details
+    # 45-year-old earning $85k (default) with $250k saved: human capital dwarfs savings
+    assert d["human_capital"] > 3 * 250_000 and d["financial_wealth"] == 250_000
+    assert d["equity_pct"] == pytest.approx(min(1.0, d["merton_share"] * (1 + d["human_capital"] / 250_000)))
+    assert response.profile.human_capital == d["human_capital"]
+    assert response.profile.research_equity_target == d["equity_pct"]
+    assert d["retirement_income"] == pytest.approx(0.4 * 85_000)  # blank retirement income = 40% of income
+    point = response.efficient_frontier.research_informed_point
+    assert point is not None and point.volatility == rec.volatility
+    assert any(n.startswith("Research-informed:") for n in response.notes)
+
+
+def test_retiree_research_equity_matches_duarte_range(portfolio_service):
+    """Rubric check: a typical 68-year-old retiree lands at ~55-65% equity, well above popular age rules."""
+    resp = portfolio_service.build_portfolio(RETIREE)
+    equity = resp.research_informed.details["equity_pct"]
+    assert 0.55 <= equity <= 0.65
+    linear = portfolio_service.build_portfolio({**RETIREE, "hump_glide_path": False})
+    assert linear.rule_based.details["equity_pct"] < 0.50  # 110 - age rule, plus the risk shift
+    insight = resp.research_insight
+    by_key = {c.key: c.equity for c in insight.comparisons}
+    assert by_key["research_informed"] == equity
+    assert by_key["age_rule"] == pytest.approx(0.32) and 0.30 <= by_key["target_date_fund"] <= 0.40
+    assert equity - by_key["age_rule"] > 0.20  # materially more stock than popular wisdom
+    assert "more stock than" in insight.headline
+    assert any("Duarte" in p for p in insight.points) and any("human capital" in p for p in insight.points)
+    assert len(insight.sources) == 3
+
+
+def test_research_equity_rises_with_income_and_falls_with_wealth(portfolio_service):
+    base = portfolio_service.build_portfolio(RETIREE).research_informed.details["equity_pct"]
+    richer = portfolio_service.build_portfolio({**RETIREE, "initial_investment": 1_500_000})
+    more_income = portfolio_service.build_portfolio({**RETIREE, "retirement_income": 45_000})
+    assert richer.research_informed.details["equity_pct"] < base < more_income.research_informed.details["equity_pct"]
+    # the other models ignore income entirely
+    assert more_income.rule_based.details["equity_pct"] == portfolio_service.build_portfolio(RETIREE).rule_based.details["equity_pct"]
+
+
+def test_income_fields_do_not_change_other_models(portfolio_service, response):
+    other = portfolio_service.build_portfolio({**REQUEST, "annual_income": 250_000, "retirement_income": 90_000,
+                                               "retirement_age": 60})
+    for method in ("rule_based", "mean_variance"):
+        assert other.recommendation(method).holdings == response.recommendation(method).holdings
+    assert other.research_informed.details["human_capital"] != response.research_informed.details["human_capital"]
+
+
+def test_zero_income_before_retirement_warns(portfolio_service):
+    resp = portfolio_service.build_portfolio({**REQUEST, "annual_income": 0})
+    assert any("Annual income is $0" in w for w in resp.warnings)

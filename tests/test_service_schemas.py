@@ -10,8 +10,11 @@ BOUNDS = {
     "age": (18, 80),
     "target_amount": (1_000, 100_000_000),
     "backtest_years": (10, 20),
+    "annual_income": (0, 5_000_000),
+    "retirement_income": (0, 1_000_000),
+    "retirement_age": (50, 75),
 }
-INT_FIELDS = ("horizon_years", "age", "backtest_years")
+INT_FIELDS = ("horizon_years", "age", "backtest_years", "retirement_age")
 
 
 def test_defaults_are_valid():
@@ -20,6 +23,14 @@ def test_defaults_are_valid():
     assert (req.horizon_years, req.initial_investment, req.monthly_contribution, req.age) == (25, 50_000, 1_000, 40)
     assert req.target_amount is None and req.resolved_target == 1_500_000
     assert (req.backtest_years, req.rebalance) == (10, "quarterly")
+    assert (req.annual_income, req.retirement_income, req.retirement_age) == (85_000, None, 67)
+    assert req.resolved_retirement_income == pytest.approx(34_000) and not req.is_retired
+
+
+def test_retirement_income_blank_and_override():
+    assert PortfolioRequest(annual_income=100_000, retirement_income="").resolved_retirement_income == 40_000
+    assert PortfolioRequest(annual_income=100_000, retirement_income=25_000).resolved_retirement_income == 25_000
+    assert PortfolioRequest(age=68, retirement_age=67).is_retired
 
 
 @pytest.mark.parametrize("goal,target", [("retirement", 1_500_000), ("home_purchase", 150_000),
@@ -74,7 +85,10 @@ def test_coerces_widget_values_and_forbids_unknown_fields():
 def test_form_options_match_model():
     options = get_form_options()
     assert list(options) == ["risk_tolerance", "horizon_years", "initial_investment", "monthly_contribution", "goal",
-                             "age", "target_amount", "backtest_years", "rebalance", "hump_glide_path"]
+                             "age", "target_amount", "backtest_years", "rebalance", "hump_glide_path",
+                             "annual_income", "retirement_income", "retirement_age"]
+    assert options["annual_income"]["default"] == 85_000 and options["retirement_income"]["default"] is None
+    assert options["retirement_income"]["default_rate"] == 0.4
     assert options["hump_glide_path"]["default"] is True and options["hump_glide_path"]["widget"] == "checkbox"
     for field, (low, high) in BOUNDS.items():
         assert (options[field]["minimum"], options[field]["maximum"]) == (low, high)

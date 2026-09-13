@@ -18,7 +18,15 @@ from portfolio_builder.ui.app import (
     sidebar_tooltips,
 )
 from portfolio_builder.ui.formatting import format_money, parse_money
-from portfolio_builder.ui.theme import ASSET_CLASS_COLORS, FRONTIER_COLOR, METHOD_COLORS, TARGET_COLOR
+from portfolio_builder.ui.theme import (
+    ASSET_CLASS_COLORS,
+    FRONTIER_COLOR,
+    METHOD_COLORS,
+    METHODS,
+    POPULAR_RULE_COLOR,
+    RESEARCH_INFORMED_COLOR,
+    TARGET_COLOR,
+)
 
 
 @pytest.fixture(scope="module")
@@ -31,7 +39,7 @@ def trace_names(fig: go.Figure) -> list[str]:
 
 
 def test_allocation_donut_per_portfolio(response):
-    figs = {m: charts.allocation_donut(response, m) for m in ("rule_based", "mean_variance")}
+    figs = {m: charts.allocation_donut(response, m) for m in METHODS}
     for method, fig in figs.items():
         assert [t.type for t in fig.data] == ["pie"]
         assert sum(fig.data[0].values) == pytest.approx(1.0)
@@ -46,7 +54,10 @@ def test_allocation_donut_per_portfolio(response):
 def test_risk_return_scatter(response):
     names = trace_names(charts.risk_return_scatter(response))
     assert names == [response.efficient_frontier.label, "Asset classes", "Max Sharpe",
-                     "Rule-based Lifecycle Portfolio", "Mean-variance Optimized Portfolio"]
+                     "Rule-based Lifecycle Portfolio", "Mean-variance Optimized Portfolio", "Research-informed Portfolio"]
+    stars = charts.risk_return_scatter(response).data[3:]
+    assert [t.marker.color for t in stars] == [METHOD_COLORS[m] for m in METHODS]
+    assert stars[2].x[0] == response.research_informed.volatility
     assert names[0] == "Efficient frontier (glide-path equity band)"  # hump glide path is the default
     fig = charts.risk_return_scatter(response)
     assert len(fig.data[1].x) == 7  # 6 asset classes + cash
@@ -57,7 +68,7 @@ def test_risk_return_scatter(response):
 
 def test_wealth_projection_per_portfolio_on_shared_scale(response):
     y_max = charts.wealth_y_max(response)
-    for method in ("rule_based", "mean_variance"):
+    for method in METHODS:
         fig = charts.wealth_projection(response, method, y_max)
         names = set(trace_names(fig))
         assert {"Expected (mean)", "Optimistic (75th pct)", "Pessimistic (25th pct)", "Total contributed"} <= names
@@ -66,27 +77,30 @@ def test_wealth_projection_per_portfolio_on_shared_scale(response):
         assert expected.line.color == METHOD_COLORS[method]
         assert tuple(fig.layout.yaxis.range) == (0, y_max)
         assert any("Goal" in (a.text or "") for a in fig.layout.annotations)
-    highest = max(p.p75 for m in ("rule_based", "mean_variance") for p in response.recommendation(m).projection.points)
+    highest = max(p.p75 for m in METHODS for p in response.recommendation(m).projection.points)
     assert y_max >= highest
 
 
 def test_backtest_chart(response):
     fig = charts.backtest_chart(response)
-    assert trace_names(fig)[::2] == ["Rule-based Lifecycle Portfolio", "Mean-variance Optimized Portfolio", "S&P 500 (SPY)"]
-    assert [t.line.color for t in fig.data[::2]] == [METHOD_COLORS[k] for k in ("rule_based", "mean_variance", "benchmark")]
-    assert len(fig.data) == 6 and len(fig.data[0].x) == len(response.backtest.points)
+    assert trace_names(fig)[::2] == ["Rule-based Lifecycle Portfolio", "Mean-variance Optimized Portfolio",
+                                     "Research-informed Portfolio", "S&P 500 (SPY)"]
+    assert [t.line.color for t in fig.data[::2]] == [METHOD_COLORS[k] for k in (*METHODS, "benchmark")]
+    assert len(fig.data) == 8 and len(fig.data[0].x) == len(response.backtest.points)
 
 
 def test_components(response):
     for method, title in (("rule_based", "Rule-based Lifecycle Portfolio"),
-                          ("mean_variance", "Mean-variance Optimized Portfolio")):
+                          ("mean_variance", "Mean-variance Optimized Portfolio"),
+                          ("research_informed", "Research-informed Portfolio")):
         html = components.summary_header(response, method)
-        assert title in html
+        assert title in html and "class='basis'" in html
         for label in ("Exp. return", "Volatility", "Sharpe", "Max drawdown", "Goal odds"):
             assert html.count(label) == 1
 
     chips = components.profile_chips(response)
-    assert "Age <b>40</b>" in chips and "$1,500,000" in chips
+    assert "Age <b>40</b>" in chips and "$1,500,000" in chips and "Human capital" in chips
+    assert "human capital" in components.equity_basis(response, "research_informed")[1]
 
     table = components.holdings_table(response, "rule_based")
     assert list(table.columns) == [" ", "Ticker", "Asset class", "Weight", "Amount"]
@@ -98,8 +112,13 @@ def test_components(response):
         assert f"background-color:{slice_colors[row['Asset class']]}" in row[" "]
 
     header = components.comparison_header()
-    assert "Rule-based Lifecycle Portfolio" in header and "Mean-variance Optimized Portfolio" in header
-    assert METHOD_COLORS["rule_based"] in header and METHOD_COLORS["mean_variance"] in header
+    for method in METHODS:
+        assert components.METHOD_TITLES[method] in header and METHOD_COLORS[method] in header
+
+    card = components.research_insight_card(response)
+    assert "Research vs. Popular Wisdom" in card and card.count("class='eq-bar") == 5
+    assert card.count(POPULAR_RULE_COLOR) == 2 and RESEARCH_INFORMED_COLOR in card
+    assert all(escape_point in card for escape_point in ("Choi (2022)", "Duarte"))
 
     notes = components.notes_markdown(response)
     assert "Assumptions" in notes and "Funds in these portfolios" in notes and "**VTI**: VTI Fund" in notes
@@ -128,9 +147,10 @@ def test_dashboard_update_valid_and_invalid(portfolio_service):
     dashboard = Dashboard(portfolio_service)
     values = default_values()
     out = dict(zip(OUTPUT_KEYS, dashboard.update(*[values[f] for f in INPUT_FIELDS])))
-    assert len(out) == len(OUTPUT_KEYS) == 14
+    assert len(out) == len(OUTPUT_KEYS) == 19
+    assert "Research vs. Popular Wisdom" in out["insight"]
     assert "status" in out["status"]
-    for method in ("rule_based", "mean_variance"):
+    for method in METHODS:
         assert "tiles" in out[f"header_{method}"]
         assert isinstance(out[f"donut_{method}"], go.Figure)
         assert isinstance(out[f"table_{method}"], pd.DataFrame)
@@ -155,8 +175,10 @@ def test_dashboard_update_valid_and_invalid(portfolio_service):
 
 
 def test_asset_palette_does_not_reuse_portfolio_colors():
-    assert not set(ASSET_CLASS_COLORS.values()) & set(METHOD_COLORS.values())
+    assert not set(ASSET_CLASS_COLORS.values()) & {*METHOD_COLORS.values(), POPULAR_RULE_COLOR}
+    assert len(set(METHOD_COLORS.values())) == len(METHOD_COLORS)
     assert FRONTIER_COLOR not in {*ASSET_CLASS_COLORS.values(), *METHOD_COLORS.values(), TARGET_COLOR}
+    assert RESEARCH_INFORMED_COLOR == "#9333EA"
     assert len(set(ASSET_CLASS_COLORS.values())) == len(ASSET_CLASS_COLORS)
 
 
@@ -185,8 +207,10 @@ def test_format_money(value, expected):
 
 def test_money_inputs_are_formatted_textboxes(portfolio_service):
     demo = build_demo(portfolio_service)
-    boxes = {b.elem_id: b for b in demo.blocks.values() if getattr(b, "elem_id", None) in ("in-initial", "in-monthly", "in-target")}
-    assert set(boxes) == {"in-initial", "in-monthly", "in-target"}
+    ids = ("in-initial", "in-monthly", "in-target", "in-income", "in-retire-income")
+    boxes = {b.elem_id: b for b in demo.blocks.values() if getattr(b, "elem_id", None) in ids}
+    assert set(boxes) == set(ids)
+    assert boxes["in-income"].value == "$85,000" and boxes["in-retire-income"].value == ""
     assert all(isinstance(b, gr.Textbox) and "money-input" in (b.elem_classes or []) for b in boxes.values())
     assert boxes["in-initial"].value == "$50,000" and boxes["in-monthly"].value == "$1,000"
     assert boxes["in-target"].value == "$1,500,000"
@@ -208,7 +232,7 @@ def test_holdings_table_fits_largest_portfolio_without_scrolling(portfolio_servi
     assert HOLDINGS_TABLE_HEIGHT >= 45 + 36 * MAX_HOLDINGS
     demo = build_demo(portfolio_service)
     tables = [b for b in demo.blocks.values() if isinstance(b, gr.Dataframe)]
-    assert len(tables) == 2 and all(t.max_height == HOLDINGS_TABLE_HEIGHT for t in tables)
+    assert len(tables) == 3 and all(t.max_height == HOLDINGS_TABLE_HEIGHT for t in tables)
 
 
 

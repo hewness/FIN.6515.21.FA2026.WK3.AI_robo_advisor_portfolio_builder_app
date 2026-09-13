@@ -2,6 +2,7 @@
 
     python -m portfolio_builder.service --age 45 --risk moderate --horizon 20 --initial 100000 --monthly 1000 --goal retirement
     python -m portfolio_builder.service --age 30 --risk 8 --horizon 3 --goal home_purchase --json
+    python -m portfolio_builder.service --age 68 --risk moderate --horizon 20 --initial 500000 --income 0 --retirement-income 30000
 """
 
 from __future__ import annotations
@@ -45,6 +46,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rebalance", default=d["rebalance"], help="monthly, quarterly or annual")
     parser.add_argument("--glide-path", choices=("hump", "linear"), default="hump" if d["hump_glide_path"] else "linear",
                         help="Equity glide path: hump-shaped (default) or linear 110 - age")
+    parser.add_argument("--income", type=float, default=d["annual_income"], help="Annual income (0 if retired)")
+    parser.add_argument("--retirement-income", type=float,
+                        help="Social Security + pensions per year (default 40%% of income)")
+    parser.add_argument("--retirement-age", type=int, default=d["retirement_age"], help="Retirement age (50-75)")
     parser.add_argument("--json", action="store_true", help="Print the full response as JSON")
     args = parser.parse_args(argv)
 
@@ -54,7 +59,8 @@ def main(argv: list[str] | None = None) -> int:
             "risk_tolerance": args.risk, "horizon_years": args.horizon, "initial_investment": args.initial,
             "monthly_contribution": args.monthly, "goal": args.goal, "age": args.age,
             "target_amount": args.target, "backtest_years": args.backtest_years, "rebalance": args.rebalance,
-            "hump_glide_path": args.glide_path == "hump",
+            "hump_glide_path": args.glide_path == "hump", "annual_income": args.income,
+            "retirement_income": args.retirement_income, "retirement_age": args.retirement_age,
         })
     except InputValidationError as exc:
         for field, message in exc.field_errors.items():
@@ -74,10 +80,12 @@ def main(argv: list[str] | None = None) -> int:
           f"-> effective {pr.effective_risk_tolerance:g} ({pr.risk_band})")
     print(f"{pr.horizon_adjustment}")
     print(f"Glide path: {pr.glide_path} -> equity target {pr.equity_target:.1%}")
+    print(f"Human capital: ${pr.human_capital:,.0f} -> research-informed equity {pr.research_equity_target:.1%}")
     print(f"Estimates: {md.estimation_start} to {md.estimation_end} ({md.observations} {md.frequency} obs), "
           f"risk-free {md.risk_free_rate:.2%}, data as of {md.data_as_of}")
     _print_recommendation(response.rule_based)
     _print_recommendation(response.mean_variance)
+    _print_recommendation(response.research_informed)
     print("=" * 88)
     print(f"Efficient frontier: {len(response.efficient_frontier.points)} points; references: "
           + ", ".join(f"{r.name} ({r.expected_return:.2%} / {r.volatility:.2%})"
@@ -93,6 +101,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\n{label}:")
             for item in items:
                 print(f"  - {item}")
+    insight = response.research_insight
+    print(f"\nResearch vs. popular wisdom: {insight.headline}")
+    for c in insight.comparisons:
+        print(f"  {c.label:26} {c.equity:6.1%}")
+    for point in insight.points:
+        print(f"  - {point}")
     print("\nNotes:")
     for note in response.notes:
         print(f"  - {note}")
