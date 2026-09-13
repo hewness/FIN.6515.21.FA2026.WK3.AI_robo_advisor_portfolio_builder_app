@@ -16,20 +16,19 @@ class AssetClass:
 
 
 ASSET_CLASSES: tuple[AssetClass, ...] = (
-    AssetClass("us_large_cap", "US large-cap stocks", "Growth, domestic equity exposure", ("SPY", "VTI")),
-    AssetClass(
-        "intl_developed",
-        "International developed stocks",
-        "Diversification, international exposure",
-        ("EFA", "VXUS"),
-    ),
-    AssetClass("emerging_markets", "Emerging market stocks", "Higher growth potential, higher risk", ("EEM", "VWO")),
-    AssetClass("us_aggregate_bonds", "US Aggregate bonds", "Stability, income", ("AGG", "BND")),
-    AssetClass("tips", "Treasury inflation-protected securities", "Inflation Hedge", ("TIP", "VTIP")),
+    AssetClass("us_large_cap", "US large-cap stocks", "Growth, domestic equity exposure", ("VTI",)),
+    AssetClass("intl_developed", "International developed stocks", "Diversification, international exposure", ("VXUS",)),
+    AssetClass("emerging_markets", "Emerging market stocks", "Higher growth potential, higher risk", ("VWO",)),
+    AssetClass("us_aggregate_bonds", "US Aggregate bonds", "Stability, income", ("BND",)),
+    AssetClass("tips", "Treasury inflation-protected securities", "Inflation Hedge", ("VTIP",)),
     AssetClass("real_estate", "Real estate (REITs)", "Real asset diversification", ("VNQ",)),
     # Cash has no ticker; it is modeled outside the market data feed.
     AssetClass("cash", "Cash and Money Markets", "Liquidity, capital preservation"),
 )
+
+# Backtest-only history proxies: older ETFs tracking the same asset class whose returns stand in before a
+# universe fund's inception, so 10-20 year backtests remain possible. They are never recommended or held.
+HISTORY_PROXIES: dict[str, str] = {"VTI": "SPY", "VXUS": "EFA", "VWO": "EEM", "BND": "AGG", "VTIP": "TIP"}
 
 _BY_KEY: dict[str, AssetClass] = {ac.key: ac for ac in ASSET_CLASSES}
 _BY_TICKER: dict[str, AssetClass] = {}
@@ -38,10 +37,18 @@ for _ac in ASSET_CLASSES:
         if _ticker in _BY_TICKER:
             raise ValueError(f"Ticker {_ticker} is assigned to more than one asset class")
         _BY_TICKER[_ticker] = _ac
+for _fund, _proxy in HISTORY_PROXIES.items():
+    if _fund not in _BY_TICKER or _proxy in _BY_TICKER:
+        raise ValueError(f"History proxy {_proxy} for {_fund} must map a universe fund to a non-universe ticker")
 
 
 def get_asset_classes() -> tuple[AssetClass, ...]:
     return ASSET_CLASSES
+
+
+def get_history_proxies() -> dict[str, str]:
+    """Universe fund -> older same-asset-class ETF used only to extend backtest history."""
+    return dict(HISTORY_PROXIES)
 
 
 def get_tickers() -> list[str]:

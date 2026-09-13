@@ -52,7 +52,7 @@ def test_result_cleans_float_noise():
 
 
 def test_asset_class_weights_include_cash():
-    weights = pd.Series({"SPY": 0.3, "VTI": 0.2, "BND": 0.4, CASH: 0.1})
+    weights = pd.Series({"VTI": 0.5, "VXUS": 0.1, "BND": 0.3, CASH: 0.1})
     result = AllocationResult("x", InvestorProfile(40, 5), weights, METRICS)
     classes = result.asset_class_weights
     assert classes["US large-cap stocks"] == pytest.approx(0.5)

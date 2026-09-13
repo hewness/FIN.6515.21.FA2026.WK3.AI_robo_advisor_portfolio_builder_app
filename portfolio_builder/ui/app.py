@@ -15,6 +15,7 @@ from ..service import (
     get_form_options,
     get_portfolio_service,
 )
+from ..universe import get_tickers
 from . import charts, components
 from .formatting import format_money, parse_money
 from .interactions import build_head
@@ -32,8 +33,9 @@ OUTPUT_KEYS = (
     "scatter", "backtest_caption", "backtest", "notes",
 )
 MONEY_FIELDS = ("initial_investment", "monthly_contribution", "target_amount")
-# Tall enough for the largest possible portfolio (11 funds + cash) at 36px rows + header, so tables never scroll.
-MAX_HOLDINGS = 12
+# Tall enough for the largest possible portfolio (every universe fund + cash) at 36px rows + header,
+# so tables never scroll.
+MAX_HOLDINGS = len(get_tickers()) + 1
 HOLDINGS_TABLE_HEIGHT = 45 + 36 * MAX_HOLDINGS + 40
 PRESETS = {level.label: score for level, score in RISK_LABELS.items()}
 CUSTOM = "Custom"
@@ -162,8 +164,9 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
         # ---------------- Main panel: results ----------------
         gr.HTML(
             "<div id='app-header'><h1>AI Robo-Advisor Portfolio Builder</h1>"
-            "<p>A rule-based lifecycle portfolio and a mean-variance optimized portfolio, built from 11 ETFs "
-            "and compared side by side. Adjust the inputs in the sidebar; the dashboard updates automatically.</p></div>"
+            "<p>A rule-based lifecycle portfolio and a mean-variance optimized portfolio, built from "
+            f"{len(get_tickers())} ETFs (one per asset class) plus cash and compared side by side. Adjust the inputs "
+            "in the sidebar; the dashboard updates automatically.</p></div>"
         )
         chips = gr.HTML()
 
@@ -174,10 +177,10 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
                 with gr.Column(elem_classes=["portfolio-card", f"portfolio-card-{method}"], min_width=520):
                     header = gr.HTML()
                     with gr.Row():
-                        with gr.Column(scale=5, min_width=230):
+                        with gr.Column(scale=4, min_width=220):
                             gr.Markdown("Allocation by Asset Class", elem_classes="card-subtitle")
                             donut = gr.Plot(show_label=False, container=False, elem_classes="donut-plot")
-                        with gr.Column(scale=6, min_width=270):
+                        with gr.Column(scale=6, min_width=300):
                             gr.Markdown("Holdings", elem_classes="card-subtitle")
                             table = gr.Dataframe(show_label=False, interactive=False, max_height=HOLDINGS_TABLE_HEIGHT,
                                                  datatype=components.HOLDINGS_DATATYPES,

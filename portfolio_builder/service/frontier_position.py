@@ -35,7 +35,7 @@ def locate_on_frontier(volatility: float, expected_return: float, frontier_point
     if volatility < vol_min - _VOL_TOLERANCE:
         note = (
             f"Volatility {volatility:.2%} is below the frontier's minimum {vol_min:.2%} "
-            "(the frontier covers the 11 funds only, not cash); compared with the min-volatility portfolio."
+            "(the frontier covers the funds only, not cash); compared with the min-volatility portfolio."
         )
     elif volatility > vol_max + _VOL_TOLERANCE:
         note = (

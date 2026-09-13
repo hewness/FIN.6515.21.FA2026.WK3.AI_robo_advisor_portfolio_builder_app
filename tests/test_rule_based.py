@@ -3,17 +3,15 @@ import pandas as pd
 import pytest
 
 from portfolio_builder.optimization import CASH, InvestorProfile, MarketInputs, RuleBasedConfig, RuleBasedStrategy
-from portfolio_builder.universe import get_tickers
+from portfolio_builder.optimization import rule_based as rb
+from portfolio_builder.universe import AssetClass, get_asset_class, get_tickers
 
-# Per-ticker volatility; within each pair the second listed ticker is the more volatile one.
-VOLS = {
-    "SPY": 0.15, "VTI": 0.16, "EFA": 0.17, "VXUS": 0.165, "EEM": 0.21, "VWO": 0.20,
-    "AGG": 0.050, "BND": 0.052, "TIP": 0.06, "VTIP": 0.025, "VNQ": 0.20,
-}
+VOLS = {"VTI": 0.16, "VXUS": 0.165, "VWO": 0.20, "BND": 0.052, "VTIP": 0.025, "VNQ": 0.20,
+        "SPY": 0.15, "TIP": 0.06}  # SPY/TIP only used by the multi-fund blending test
 
 
-def universe_inputs() -> MarketInputs:
-    tickers = get_tickers()
+def universe_inputs(tickers: list[str] | None = None) -> MarketInputs:
+    tickers = tickers or get_tickers()
     vol = np.array([VOLS[t] for t in tickers])
     cov = np.diag(vol**2)
     mu = pd.Series(np.linspace(0.02, 0.09, len(tickers)), index=tickers)
@@ -36,19 +34,35 @@ def test_sleeves_and_cash():
     assert (result.weights >= 0).all() and result.weights.sum() == pytest.approx(1.0)
 
 
-def test_ticker_selection_by_risk_tolerance():
+def test_each_asset_class_holds_its_single_fund():
     inputs = universe_inputs()
+    result = RuleBasedStrategy().allocate(InvestorProfile(40, 5.5), inputs)
+    classes = result.details["asset_class_weights"]
+    fund_for = {"us_large_cap": "VTI", "intl_developed": "VXUS", "emerging_markets": "VWO",
+                "us_aggregate_bonds": "BND", "tips": "VTIP", "real_estate": "VNQ"}
+    for key, fund in fund_for.items():
+        assert result.weights[fund] == pytest.approx(classes[key])
+    assert set(result.weights.index) == set(get_tickers()) | {CASH}
+    assert result.details["ticker_order_by_volatility"]["tips"] == ["VTIP"]
+
+
+def test_multi_fund_class_blends_by_risk_tolerance(monkeypatch):
+    """The blending rule still works if an asset class is given more than one fund."""
+    two_funds = {"us_large_cap": ("SPY", "VTI"), "tips": ("TIP", "VTIP")}
+
+    def patched(key):
+        ac = get_asset_class(key)
+        return AssetClass(ac.key, ac.name, ac.role, two_funds.get(key, ac.tickers))
+
+    monkeypatch.setattr(rb, "get_asset_class", patched)
+    inputs = universe_inputs([*get_tickers(), "SPY", "TIP"])
     conservative = RuleBasedStrategy().allocate(InvestorProfile(40, 1), inputs).weights
     aggressive = RuleBasedStrategy().allocate(InvestorProfile(40, 10), inputs).weights
     middle = RuleBasedStrategy().allocate(InvestorProfile(40, 5.5), inputs).weights
-
-    for calm, volatile in [("SPY", "VTI"), ("VXUS", "EFA"), ("VWO", "EEM"), ("AGG", "BND"), ("VTIP", "TIP")]:
+    for calm, volatile in [("SPY", "VTI"), ("VTIP", "TIP")]:
         assert conservative.get(volatile, 0.0) == 0 and conservative[calm] > 0
         assert aggressive.get(calm, 0.0) == 0 and aggressive[volatile] > 0
         assert middle[calm] == pytest.approx(middle[volatile])
-    assert conservative["VNQ"] > 0 and aggressive["VNQ"] > 0
-    order = RuleBasedStrategy().allocate(InvestorProfile(40, 1), inputs).details["ticker_order_by_volatility"]
-    assert order["tips"] == ["VTIP", "TIP"]
 
 
 def test_constraints_hold_across_profiles():

@@ -54,7 +54,8 @@ def test_holdings_weights_and_amounts(response, method):
 def test_rule_based_contents(response):
     rec = response.rule_based
     assert any(h.ticker == "CASH" and h.name == "Cash and Money Markets" for h in rec.holdings)
-    assert any(h.name == "SPY Fund" for h in rec.holdings)  # fund names from cached info
+    assert any(h.name == "VTI Fund" for h in rec.holdings)  # fund names from cached info
+    assert len(rec.holdings) == 7  # one fund per asset class + cash
     assert 0 < rec.details["equity_pct"] <= 1
 
 
@@ -158,7 +159,7 @@ def test_asset_class_points(response):
     assert len(points) == 7
     assert points["Cash and Money Markets"].volatility == 0
     assert points["Cash and Money Markets"].expected_return == response.market_data.risk_free_rate
-    assert points["US large-cap stocks"].tickers == ["SPY", "VTI"]
+    assert points["US large-cap stocks"].tickers == ["VTI"]
 
 
 def test_explicit_target_and_warnings(portfolio_service):

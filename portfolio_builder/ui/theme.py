@@ -33,7 +33,7 @@ ASSET_CLASS_COLORS = {
 ASSET_CLASS_SHORT = {
     "US large-cap stocks": "US large-cap",
     "International developed stocks": "Intl developed",
-    "Emerging market stocks": "Emerging markets",
+    "Emerging market stocks": "Emerging mkts",
     "Real estate (REITs)": "REITs",
     "US Aggregate bonds": "US bonds",
     "Treasury inflation-protected securities": "TIPS",

@@ -11,7 +11,7 @@ import pandas as pd
 
 from ..market_data import MarketDataService
 from ..optimization.models import CASH
-from ..universe import get_asset_classes
+from ..universe import get_history_proxies
 
 Rebalance = Literal["monthly", "quarterly", "annual"]
 _PERIOD_CODES = {"monthly": "M", "quarterly": "Q", "annual": "Y"}
@@ -83,21 +83,9 @@ class Backtester:
             self._returns_cache.clear()
 
     def proxy_map(self, tickers: list[str] | None = None) -> dict[str, str]:
-        """Map each younger fund to the sibling in its asset class with the longest history."""
-        classes = [ac for ac in get_asset_classes() if len(ac.tickers) > 1]
-        all_tickers = sorted({t for ac in classes for t in ac.tickers})
-        self.market_data.ensure_cached(all_tickers)
-        first_dates = self.market_data.cache_status(all_tickers)["first_date"]
-        mapping: dict[str, str] = {}
-        for ac in classes:
-            dated = [(first_dates.get(t), t) for t in ac.tickers if pd.notna(first_dates.get(t))]
-            if len(dated) < 2:
-                continue
-            earliest = min(dated)[1]
-            for _, t in dated:
-                if t != earliest and (tickers is None or t in tickers):
-                    mapping[t] = earliest
-        return mapping
+        """History proxy (older same-asset-class ETF) for each fund in ``tickers``; see ``HISTORY_PROXIES``."""
+        proxies = get_history_proxies()
+        return {t: p for t, p in proxies.items() if tickers is None or t in tickers}
 
     def run(
         self,
@@ -155,7 +143,10 @@ class Backtester:
         }
         if proxies_used:
             listed = ", ".join(f"{t} (via {v['proxy']} until {v['until']})" for t, v in sorted(proxies_used.items()))
-            notes.append(f"Before these funds existed, a sibling fund's returns were used: {listed}.")
+            notes.append(
+                "Before these funds existed, an older ETF tracking the same asset class stood in "
+                f"(history only, never held): {listed}."
+            )
 
         values = pd.DataFrame(index=pd.DatetimeIndex([start, *window.index], name="date"))
         for name, w in weights.items():

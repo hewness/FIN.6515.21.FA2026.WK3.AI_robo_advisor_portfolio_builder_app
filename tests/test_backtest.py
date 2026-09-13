@@ -109,7 +109,8 @@ def test_proxy_fills_before_inception(tmp_path):
     tip = growth(0.0002)
     vtip = growth(0.0001, index=late, start=50.0)
     bt = backtester(tmp_path, {"TIP": tip, "VTIP": vtip})
-    assert bt.proxy_map()["VTIP"] == "TIP"
+    assert bt.proxy_map() == {"VTI": "SPY", "VXUS": "EFA", "VWO": "EEM", "BND": "AGG", "VTIP": "TIP"}
+    assert bt.proxy_map(["VTIP", "VNQ"]) == {"VTIP": "TIP"}
 
     result = bt.run({"p": pd.Series({"VTIP": 1.0})}, BacktestConfig(years=9), initial_value=100)
     assert result.proxies_used["VTIP"]["proxy"] == "TIP"
@@ -118,7 +119,7 @@ def test_proxy_fills_before_inception(tmp_path):
     np.testing.assert_allclose(before.pct_change().dropna(), 0.0002, rtol=1e-9)
     after = result.values["p"].loc["2016-01-06":]
     np.testing.assert_allclose(after.pct_change().dropna(), 0.0001, rtol=1e-9)
-    assert any("sibling fund" in n for n in result.notes)
+    assert any("older ETF tracking the same asset class" in n and "never held" in n for n in result.notes)
 
     no_proxy = bt.run({"p": pd.Series({"VTIP": 1.0})}, BacktestConfig(years=9, use_proxies=False))
     assert no_proxy.start >= pd.Timestamp("2016-01-04")

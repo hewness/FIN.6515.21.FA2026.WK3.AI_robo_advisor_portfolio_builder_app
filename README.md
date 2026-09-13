@@ -48,7 +48,7 @@ Invalid inputs are listed in a red status box in the sidebar, and the charts kee
 **Main panel**
 - **A card for each portfolio** (Rule-based Lifecycle Portfolio in indigo, Mean-variance Optimized Portfolio in teal), side by side:
   - Tiles for expected annual return, volatility, Sharpe ratio, maximum historical drawdown (from the backtest), and probability of reaching the goal (share of 5,000 simulated outcomes at or above the target).
-  - An allocation-by-asset-class donut next to the holdings table. The table is tall enough for every holding (up to 11 funds plus cash), so it never scrolls, and each section lines up across the two cards. Each holding row starts with a color swatch that matches its asset class's slice. Hovering over (or tapping) a slice highlights that asset class's holdings and dims the rest.
+  - An allocation-by-asset-class donut next to the holdings table. The table is tall enough for every holding (up to 6 funds plus cash), so it never scrolls, and each section lines up across the two cards. Each holding row starts with a color swatch that matches its asset class's slice. Hovering over (or tapping) a slice highlights that asset class's holdings and dims the rest.
   - Projected wealth: expected (mean), optimistic (75th percentile) and pessimistic (25th percentile) paths, including contributions, with the goal target line. Both cards use the same scale.
 - **Rule-based Lifecycle Portfolio vs Mean-variance Optimized Portfolio:** a comparison container with two charts side by side that each plot both portfolios.
   - **Risk vs. Return:** asset classes (each an equal-weight blend of its funds), cash, the efficient frontier, the max-Sharpe point and both portfolios.
@@ -61,7 +61,7 @@ Invalid inputs are listed in a red status box in the sidebar, and the charts kee
 
 **Backtest method** (`portfolio_builder/backtest`):
 - Daily total returns with fixed target weights. Holdings drift and reset at each rebalance date. Cash earns the risk-free rate.
-- Before a fund existed, its sibling in the same asset class stands in (VTI→SPY, VXUS→EFA, VWO→EEM, BND→AGG, VTIP→TIP), and the chart caption says so.
+- Before a fund existed, an older ETF tracking the same asset class stands in: VTI→SPY, VXUS→EFA, VWO→EEM, BND→AGG, VTIP→TIP (`HISTORY_PROXIES` in `universe.py`). These history proxies are used only to extend the backtest; they are never recommended or held, and the backtest notes list where they were used.
 - It models the initial investment only, with no contributions, fees or taxes.
 - Mean-variance weights are estimated on overlapping history, so that backtest is in-sample.
 
@@ -69,15 +69,15 @@ Invalid inputs are listed in a red status box in the sidebar, and the charts kee
 
 | Asset class | Role in portfolio | Tickers |
 |---|---|---|
-| US large-cap stocks | Growth, domestic equity exposure | SPY, VTI |
-| International developed stocks | Diversification, international exposure | EFA, VXUS |
-| Emerging market stocks | Higher growth potential, higher risk | EEM, VWO |
-| US Aggregate bonds | Stability, income | AGG, BND |
-| Treasury inflation-protected securities | Inflation Hedge | TIP, VTIP |
+| US large-cap stocks | Growth, domestic equity exposure | VTI |
+| International developed stocks | Diversification, international exposure | VXUS |
+| Emerging market stocks | Higher growth potential, higher risk | VWO |
+| US Aggregate bonds | Stability, income | BND |
+| Treasury inflation-protected securities | Inflation Hedge | VTIP |
 | Real estate (REITs) | Real asset diversification | VNQ |
 | Cash and Money Markets | Liquidity, capital preservation | *(no ticker)* |
 
-Defined in `portfolio_builder/universe.py`.
+One fund per asset class, defined in `portfolio_builder/universe.py`. SPY, EFA, EEM, AGG and TIP are cached as backtest-only history proxies (see *Backtest method*); SPY is also the S&P 500 benchmark.
 
 ## Market data
 
@@ -93,9 +93,9 @@ A snapshot of the cache is committed to the repo (the Parquet files are stored w
 
 ```bash
 python -m portfolio_builder.market_data status                  # what is cached
-python -m portfolio_builder.market_data download                # download missing tickers only
+python -m portfolio_builder.market_data download                # download missing tickers (universe + history proxies)
 python -m portfolio_builder.market_data refresh                 # force re-download of everything
-python -m portfolio_builder.market_data refresh --tickers SPY   # force re-download of one ticker
+python -m portfolio_builder.market_data refresh --tickers VTI   # force re-download of one ticker
 ```
 
 ### Python
@@ -107,9 +107,9 @@ svc = get_market_data_service()
 prices  = svc.get_prices()                          # adjusted close, dates x tickers, common dates only
 returns = svc.get_returns(frequency="monthly")      # total returns; also "daily"/"weekly", method="log"
 cov     = returns.cov() * 12                        # annualized covariance for optimization
-divs    = svc.get_dividends(["AGG", "BND"])         # cash dividends per share
+divs    = svc.get_dividends(["BND", "VTIP"])        # cash dividends per share
 meta    = svc.get_universe_metadata()               # asset class, role, name, expense ratio
-svc.refresh(["SPY"])                                # re-download; keeps old data if the download fails
+svc.refresh(["VTI"])                                # re-download; keeps old data if the download fails
 ```
 
 Every method defaults to the full universe. Use `align="outer"` to keep each fund's full history (older funds start before VTIP's 2012 inception). A data source other than yfinance can be plugged in by implementing `MarketDataConnector` (`portfolio_builder/market_data/connectors/base.py`).
@@ -120,7 +120,7 @@ Every method defaults to the full universe. Use `align="outer"` to keep each fun
 
 | Approach | How it allocates |
 |---|---|
-| `rule_based` | Equity % = 110 − age, shifted from −20 points (risk 1) to +20 points (risk 10) and kept between 10% and 100%. Equity is split 55% US large-cap / 25% international developed / 10% emerging / 10% REITs. The rest is split 70% aggregate bonds / 20% TIPS / 10% cash. Within each asset class, the tickers are ranked by historical volatility: conservative clients hold the calmer fund, aggressive clients the more volatile one, and clients in between get a blend. |
+| `rule_based` | Equity % = 110 − age, shifted from −20 points (risk 1) to +20 points (risk 10) and kept between 10% and 100%. Equity is split 55% US large-cap / 25% international developed / 10% emerging / 10% REITs. The rest is split 70% aggregate bonds / 20% TIPS / 10% cash. Each asset class's weight goes to its single fund. (If a class were given several funds, they would be ranked by historical volatility: conservative clients get the calmer fund, aggressive clients the more volatile one, and clients in between a blend.) |
 | `mean_variance` | Builds the long-only efficient frontier with `scipy.optimize.minimize` (SLSQP). The client portfolio has the highest return for a target volatility, placed by risk tolerance between the minimum-volatility portfolio (risk 1) and the maximum-return portfolio (risk 10). Other objectives: `max_sharpe`, `min_volatility`, `target_volatility`, `target_return`. The result also includes the frontier and the min-volatility, max-Sharpe and max-return reference portfolios. |
 
 Cash (shown as `CASH`) earns the risk-free rate, default 4%, at zero volatility. Only the rule-based approach holds it.
@@ -148,7 +148,7 @@ python -m portfolio_builder.optimization --age 30 --risk 8 --method mean_varianc
 python -m portfolio_builder.optimization --age 55 --risk 4 --method mean_variance --objective max_sharpe
 ```
 
-Unconstrained mean-variance results depend heavily on the historical sample. Since 2012, SPY has had the best return and Sharpe ratio, so the frontier is mostly SPY blended with short-term TIPS. Use `max_weight` (or `--lookback-years`) for more diversified portfolios.
+Unconstrained mean-variance results depend heavily on the historical sample. Since 2012, VTI has had the best return and Sharpe ratio, so the frontier is mostly VTI blended with short-term TIPS (VTIP). Use `max_weight` (or `--lookback-years`) for more diversified portfolios.
 
 ## Service layer
 

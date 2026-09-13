@@ -115,11 +115,11 @@ def test_dividends_and_metadata(service):
 
 
 def test_cache_status(service):
-    service.get_history("SPY")
+    service.get_history("VTI")
     status = service.cache_status()
     assert list(status.index) == get_tickers()
-    assert bool(status.loc["SPY", "cached"]) and not bool(status.loc["VTI", "cached"])
-    assert status.loc["SPY", "asset_class"] == "US large-cap stocks"
+    assert bool(status.loc["VTI", "cached"]) and not bool(status.loc["VXUS", "cached"])
+    assert status.loc["VTI", "asset_class"] == "US large-cap stocks"
 
 
 def test_factory_uses_env_cache_dir(tmp_path, monkeypatch):

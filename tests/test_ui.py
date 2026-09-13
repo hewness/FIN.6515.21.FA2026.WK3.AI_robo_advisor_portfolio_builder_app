@@ -99,7 +99,7 @@ def test_components(response):
     assert METHOD_COLORS["rule_based"] in header and METHOD_COLORS["mean_variance"] in header
 
     notes = components.notes_markdown(response)
-    assert "Assumptions" in notes and "Funds in these portfolios" in notes and "**SPY**: SPY Fund" in notes
+    assert "Assumptions" in notes and "Funds in these portfolios" in notes and "**VTI**: VTI Fund" in notes
     assert "rebalancing" in components.backtest_caption(response)
 
 
@@ -200,7 +200,7 @@ def test_sidebar_help_moves_to_label_tooltips(portfolio_service):
 
 
 def test_holdings_table_fits_largest_portfolio_without_scrolling(portfolio_service):
-    assert MAX_HOLDINGS == 12  # 11 funds + cash
+    assert MAX_HOLDINGS == 7  # 6 funds + cash
     assert HOLDINGS_TABLE_HEIGHT >= 45 + 36 * MAX_HOLDINGS
     demo = build_demo(portfolio_service)
     tables = [b for b in demo.blocks.values() if isinstance(b, gr.Dataframe)]
