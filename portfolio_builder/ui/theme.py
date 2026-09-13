@@ -81,7 +81,7 @@ CSS = """
 .chip b { font-weight: 650; }
 
 .portfolio-card { background: var(--block-background-fill); border: 1px solid var(--border-color-primary) !important;
-                  border-radius: 14px !important; padding: .85rem 1rem .6rem !important; gap: .35rem !important;
+                  border-radius: 14px !important; padding: .85rem .85rem .6rem !important; gap: .35rem !important;
                   border-top: 4px solid var(--card-accent) !important; }
 .portfolio-card-rule_based { --card-accent: #4F46E5; }
 .portfolio-card-mean_variance { --card-accent: #0D9488; }
@@ -90,9 +90,17 @@ CSS = """
 .portfolio-card > .block { flex-grow: 0 !important; }
 .card-subtitle p { margin: .35rem 0 0 !important; font-size: .82rem; color: var(--body-text-color-subdued); }
 .holdings-table table, .holdings-table th, .holdings-table td, .holdings-table span, .holdings-table input {
-  font-family: var(--font) !important; font-size: .75rem !important; white-space: nowrap !important; }
-.holdings-table th, .holdings-table td { padding: .28rem .18rem !important; }
+  font-family: var(--font) !important; font-size: .74rem !important; white-space: nowrap !important; }
+.holdings-table th, .holdings-table td { padding: .28rem 0 !important; }
 .holdings-table .cell-wrap { padding: 0 .1rem !important; }
+/* Breathing room on the aligned side: text columns inset from the left border, numbers from the right. */
+.holdings-table [data-col="1"] .cell-wrap, .holdings-table [data-col="2"] .cell-wrap,
+.holdings-table th[data-heading="1"] .cell-wrap, .holdings-table th[data-heading="2"] .cell-wrap {
+  padding-left: .5rem !important; }
+.holdings-table [data-col="3"] .cell-wrap, .holdings-table [data-col="4"] .cell-wrap,
+.holdings-table [data-col="5"] .cell-wrap, .holdings-table th[data-heading="3"] .cell-wrap,
+.holdings-table th[data-heading="4"] .cell-wrap, .holdings-table th[data-heading="5"] .cell-wrap {
+  padding-left: 0 !important; padding-right: .45rem !important; }
 .holdings-table .cell-menu-button { display: none !important; }
 /* Gradio 6 body cells are div[role=gridcell][data-col]; header cells are th[data-heading]. */
 .holdings-table [data-col="3"] .cell-wrap, .holdings-table [data-col="4"] .cell-wrap,

@@ -218,7 +218,7 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
                                 "portfolio's Exp. return.", elem_classes="section-caption")
                     table = gr.Dataframe(show_label=False, interactive=False, max_height=HOLDINGS_TABLE_HEIGHT,
                                          datatype=components.HOLDINGS_DATATYPES,
-                                         column_widths=["6%", "14%", "27%", "18%", "17%", "18%"],
+                                         column_widths=["5%", "14%", "28%", "18%", "16%", "19%"],
                                          elem_classes="holdings-table")
                     gr.Markdown("Projected Wealth", elem_classes="card-subtitle")
                     gr.Markdown("Expected (mean), optimistic (75th pct) and pessimistic (25th pct) value from "
