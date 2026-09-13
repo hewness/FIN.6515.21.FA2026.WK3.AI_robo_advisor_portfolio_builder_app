@@ -6,6 +6,54 @@ from .schemas import FinancialGoal, PortfolioRecommendation, PortfolioRequest, P
 
 SHORT_GOAL_HORIZON_YEARS = 5
 CONCENTRATION_THRESHOLD = 0.60
+LOW_GOAL_PROBABILITY = 0.25
+LONG_SAVINGS_GOAL_YEARS = 15
+RETIREMENT_AGE_WARNING = 75
+
+
+def input_warnings(
+    request: PortfolioRequest,
+    profile: ProfileSummary,
+    rule_based: PortfolioRecommendation,
+    mean_variance: PortfolioRecommendation,
+) -> list[str]:
+    """Non-blocking warnings about input combinations worth a second look."""
+    warnings: list[str] = []
+    target = request.resolved_target
+
+    if target <= request.initial_investment:
+        warnings.append(
+            f"Your goal target (${target:,.0f}) is at or below your initial investment "
+            f"(${request.initial_investment:,.0f}), so it is already met."
+        )
+    else:
+        probs = [p for p in (rule_based.probability_of_meeting_target,
+                             mean_variance.probability_of_meeting_target) if p is not None]
+        if probs and max(probs) < LOW_GOAL_PROBABILITY:
+            warnings.append(
+                f"The ${target:,.0f} goal looks hard to reach: {max(probs):.0%} chance at best. "
+                "Consider a larger monthly contribution, a longer horizon, or a lower target."
+            )
+
+    if request.goal in (FinancialGoal.HOME_PURCHASE, FinancialGoal.EDUCATION) \
+            and request.horizon_years > LONG_SAVINGS_GOAL_YEARS:
+        warnings.append(
+            f"A {request.horizon_years}-year horizon is unusually long for {request.goal.label.lower()} savings; "
+            "double-check the horizon."
+        )
+
+    if request.goal is FinancialGoal.RETIREMENT and request.age + request.horizon_years > RETIREMENT_AGE_WARNING:
+        warnings.append(
+            f"This horizon runs to age {request.age + request.horizon_years}. If you plan to retire earlier, "
+            "shorten the horizon to your retirement date."
+        )
+
+    if profile.effective_risk_tolerance < profile.risk_tolerance and request.horizon_years < 3:
+        warnings.append(
+            f"With only {request.horizon_years} year{'s' if request.horizon_years != 1 else ''} to invest, "
+            f"risk was capped at {profile.effective_risk_tolerance:g} (you chose {profile.risk_tolerance:g})."
+        )
+    return warnings
 
 
 def build_notes(

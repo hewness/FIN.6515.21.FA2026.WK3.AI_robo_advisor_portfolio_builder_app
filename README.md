@@ -25,6 +25,40 @@ python app.py
 
 Then open http://127.0.0.1:7860.
 
+## Web app
+
+`app.py` launches a Gradio dashboard (`portfolio_builder/ui`) that compares the rule-based and mean-variance portfolios side by side.
+
+**Sidebar inputs** (defaults in brackets). The dashboard updates when you release a slider, change a choice, or leave a number field.
+
+| Group | Input | Control | Range / options | Default |
+|---|---|---|---|---|
+| About you | Age | Number | 18–80 | 40 |
+| | Financial goal | Dropdown | Retirement / Home purchase / Education / General wealth | Retirement |
+| | Goal target ($) | Number | $1,000–$100M; resets to the goal's default when the goal changes | $1.5M (home $150k, education $200k, general $1M) |
+| Risk profile | Risk tolerance | Preset (Conservative / Moderate / Aggressive / Custom) + 1–10 slider | presets = 3 / 5.5 / 8 | Moderate (5.5) |
+| Investment plan | Initial investment ($) | Number | $1,000–$10,000,000 | $50,000 |
+| | Monthly contribution ($) | Number | $0–$50,000 | $1,000 |
+| | Investment horizon | Slider | 1–30 years | 25 |
+| Backtest settings | Lookback | Slider | 10–20 years | 15 |
+| | Rebalancing | Radio | Monthly / Quarterly / Annual | Quarterly |
+
+Invalid inputs are listed in a red status box in the sidebar, and the charts keep the last valid results. Input combinations worth a second look (an unreachable target, a horizon beyond age 75, a very long home or education horizon, a capped short horizon) show an amber warning.
+
+**Main panel**
+- **Summary cards** for each portfolio: expected annual return, volatility, Sharpe ratio, maximum historical drawdown (from the backtest), and probability of reaching the goal (share of 5,000 simulated outcomes at or above the target).
+- **Allocation by asset class:** two donuts with consistent colors.
+- **Risk vs. return:** asset classes (each an equal-weight blend of its funds), cash, the efficient frontier, the max-Sharpe portfolio and both recommended portfolios.
+- **Projected wealth:** expected (mean), optimistic (75th percentile) and pessimistic (25th percentile) paths, including the initial investment and monthly contributions, with the goal target line.
+- **Historical backtest vs. S&P 500 (SPY):** growth of the initial investment and drawdowns over 10–20 years.
+- **Holdings tables and notes & assumptions.**
+
+**Backtest method** (`portfolio_builder/backtest`):
+- Daily total returns with fixed target weights. Holdings drift and reset at each rebalance date. Cash earns the risk-free rate.
+- Before a fund existed, its sibling in the same asset class stands in (VTI→SPY, VXUS→EFA, VWO→EEM, BND→AGG, VTIP→TIP), and the chart caption says so.
+- It models the initial investment only, with no contributions, fees or taxes.
+- Mean-variance weights are estimated on overlapping history, so that backtest is in-sample.
+
 ## Investment universe
 
 | Asset class | Role in portfolio | Tickers |
@@ -144,7 +178,7 @@ response.frontier_frame()             #   also asset_class_frame, projection_fra
 response.to_dict()                    # JSON-safe dict
 ```
 
-Projections show value at each year end, with each month's contribution added after that month's growth. They include an expected path plus 10th/50th/90th percentile bands from 5,000 lognormal simulations with a fixed seed, so repeated runs give the same result. The service loads the engine once per process and is safe to call from concurrent requests.
+Projections show value at each year end, with each month's contribution added after that month's growth. They include an expected path plus 10th, 25th, 50th, 75th and 90th percentiles from 5,000 lognormal simulations with a fixed seed, so repeated runs give the same result. The response also includes `probability_of_meeting_target` against `target_amount` (default set by goal), a 10–20 year `backtest` against the S&P 500 (`backtest_years`, `rebalance`), asset-class risk/return points, and non-blocking `warnings`. The service loads the engine once per process and is safe to call from concurrent requests.
 
 ```bash
 python -m portfolio_builder.service --age 45 --risk moderate --horizon 20 --initial 100000 --monthly 1000 --goal retirement

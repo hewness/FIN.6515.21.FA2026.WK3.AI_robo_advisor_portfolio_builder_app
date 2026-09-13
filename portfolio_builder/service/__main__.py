@@ -11,7 +11,7 @@ import json
 import sys
 
 from .portfolio_service import InputValidationError, PortfolioServiceError, get_portfolio_service
-from .schemas import PortfolioRecommendation
+from .schemas import PortfolioRecommendation, PortfolioRequest
 
 
 def _print_recommendation(rec: PortfolioRecommendation) -> None:
@@ -25,17 +25,24 @@ def _print_recommendation(rec: PortfolioRecommendation) -> None:
           + (f" | {fp.note}" if fp.note else ""))
     p = rec.projection
     print(f"projection after {p.points[-1].year} years (contributed ${p.total_contributed:,.0f}): "
-          f"p10 ${p.final_p10:,.0f} | median ${p.final_p50:,.0f} | p90 ${p.final_p90:,.0f} | expected ${p.final_expected:,.0f}")
+          f"p25 ${p.final_p25:,.0f} | median ${p.final_p50:,.0f} | p75 ${p.final_p75:,.0f} | expected ${p.final_expected:,.0f}")
+    print(f"probability of reaching ${p.target_amount:,.0f}: {p.probability_of_meeting_target:.0%} | "
+          f"max historical drawdown {rec.max_drawdown:.1%}")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m portfolio_builder.service", description="Recommend portfolios")
-    parser.add_argument("--risk", default="moderate", help="1-10 or conservative / moderate / aggressive")
-    parser.add_argument("--horizon", type=int, default=20, help="Investment horizon in years (1-30)")
-    parser.add_argument("--initial", type=float, default=100_000, help="Initial investment ($1,000-$10,000,000)")
-    parser.add_argument("--monthly", type=float, default=500, help="Monthly contribution ($0-$50,000)")
-    parser.add_argument("--goal", default="general_wealth", help="retirement, home_purchase, education, general_wealth")
-    parser.add_argument("--age", type=int, default=40, help="Age (18-80)")
+    d = {name: field.default for name, field in PortfolioRequest.model_fields.items()}
+    parser.add_argument("--risk", default=d["risk_tolerance"], help="1-10 or conservative / moderate / aggressive")
+    parser.add_argument("--horizon", type=int, default=d["horizon_years"], help="Investment horizon in years (1-30)")
+    parser.add_argument("--initial", type=float, default=d["initial_investment"],
+                        help="Initial investment ($1,000-$10,000,000)")
+    parser.add_argument("--monthly", type=float, default=d["monthly_contribution"], help="Monthly contribution ($0-$50,000)")
+    parser.add_argument("--goal", default=d["goal"].value, help="retirement, home_purchase, education, general_wealth")
+    parser.add_argument("--age", type=int, default=d["age"], help="Age (18-80)")
+    parser.add_argument("--target", type=float, help="Goal target in $ (default depends on goal)")
+    parser.add_argument("--backtest-years", type=int, default=d["backtest_years"], help="Backtest lookback, 10-20 years")
+    parser.add_argument("--rebalance", default=d["rebalance"], help="monthly, quarterly or annual")
     parser.add_argument("--json", action="store_true", help="Print the full response as JSON")
     args = parser.parse_args(argv)
 
@@ -44,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
         response = service.build_portfolio({
             "risk_tolerance": args.risk, "horizon_years": args.horizon, "initial_investment": args.initial,
             "monthly_contribution": args.monthly, "goal": args.goal, "age": args.age,
+            "target_amount": args.target, "backtest_years": args.backtest_years, "rebalance": args.rebalance,
         })
     except InputValidationError as exc:
         for field, message in exc.field_errors.items():
@@ -70,6 +78,17 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Efficient frontier: {len(response.efficient_frontier.points)} points; references: "
           + ", ".join(f"{r.name} ({r.expected_return:.2%} / {r.volatility:.2%})"
                       for r in response.efficient_frontier.reference_portfolios))
+    b = response.backtest
+    print(f"Backtest {b.start} to {b.end} ({b.years_covered:.1f}y, {b.rebalance} rebalancing), "
+          f"${b.initial_value:,.0f} initial:")
+    for m in b.metrics.values():
+        print(f"  {m.label:15} final ${m.final_value:>12,.0f} | CAGR {m.cagr:6.2%} | vol {m.volatility:6.2%} | "
+              f"Sharpe {m.sharpe_ratio:5.2f} | max drawdown {m.max_drawdown:7.2%} ({m.max_drawdown_date})")
+    for label, items in (("Warnings", response.warnings), ("Backtest notes", b.notes)):
+        if items:
+            print(f"\n{label}:")
+            for item in items:
+                print(f"  - {item}")
     print("\nNotes:")
     for note in response.notes:
         print(f"  - {note}")

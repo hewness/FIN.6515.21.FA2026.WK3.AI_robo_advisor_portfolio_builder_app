@@ -8,12 +8,32 @@ BOUNDS = {
     "initial_investment": (1_000, 10_000_000),
     "monthly_contribution": (0, 50_000),
     "age": (18, 80),
+    "target_amount": (1_000, 100_000_000),
+    "backtest_years": (10, 20),
 }
+INT_FIELDS = ("horizon_years", "age", "backtest_years")
 
 
 def test_defaults_are_valid():
     req = PortfolioRequest()
-    assert req.risk_score == 5.5 and req.goal is FinancialGoal.GENERAL_WEALTH
+    assert req.risk_score == 5.5 and req.goal is FinancialGoal.RETIREMENT
+    assert (req.horizon_years, req.initial_investment, req.monthly_contribution, req.age) == (25, 50_000, 1_000, 40)
+    assert req.target_amount is None and req.resolved_target == 1_500_000
+    assert (req.backtest_years, req.rebalance) == (15, "quarterly")
+
+
+@pytest.mark.parametrize("goal,target", [("retirement", 1_500_000), ("home_purchase", 150_000),
+                                         ("education", 200_000), ("general_wealth", 1_000_000)])
+def test_goal_target_defaults_and_override(goal, target):
+    assert PortfolioRequest(goal=goal).resolved_target == target
+    assert PortfolioRequest(goal=goal, target_amount=42_000).resolved_target == 42_000
+    assert PortfolioRequest(goal=goal, target_amount="").resolved_target == target
+
+
+def test_rebalance_values():
+    assert PortfolioRequest(rebalance="Monthly").rebalance == "monthly"
+    with pytest.raises(ValidationError):
+        PortfolioRequest(rebalance="weekly")
 
 
 @pytest.mark.parametrize("field,bounds", BOUNDS.items())
@@ -21,7 +41,7 @@ def test_numeric_bounds(field, bounds):
     low, high = bounds
     assert getattr(PortfolioRequest(**{field: low}), field) == low
     assert getattr(PortfolioRequest(**{field: high}), field) == high
-    step = 1 if field in ("horizon_years", "age") else 0.01
+    step = 1 if field in INT_FIELDS else 0.01
     for bad in (low - step, high + step):
         with pytest.raises(ValidationError):
             PortfolioRequest(**{field: bad})
@@ -53,11 +73,15 @@ def test_coerces_widget_values_and_forbids_unknown_fields():
 
 def test_form_options_match_model():
     options = get_form_options()
-    assert list(options) == ["risk_tolerance", "horizon_years", "initial_investment", "monthly_contribution", "goal", "age"]
+    assert list(options) == ["risk_tolerance", "horizon_years", "initial_investment", "monthly_contribution", "goal",
+                             "age", "target_amount", "backtest_years", "rebalance"]
     for field, (low, high) in BOUNDS.items():
         assert (options[field]["minimum"], options[field]["maximum"]) == (low, high)
     assert options["risk_tolerance"]["minimum"] == 1 and options["risk_tolerance"]["maximum"] == 10
     assert [c["score"] for c in options["risk_tolerance"]["choices"]] == [3.0, 5.5, 8.0]
     assert [c["label"] for c in options["goal"]["choices"]] == ["Retirement", "Home purchase", "Education", "General wealth"]
-    assert options["goal"]["default"] == "general_wealth"
+    assert options["goal"]["default"] == "retirement"
+    assert [c["default_target"] for c in options["goal"]["choices"]] == [1_500_000, 150_000, 200_000, 1_000_000]
+    assert options["target_amount"]["default"] == 1_500_000
+    assert [c["value"] for c in options["rebalance"]["choices"]] == ["monthly", "quarterly", "annual"]
     assert options["horizon_years"]["widget"] == "slider"

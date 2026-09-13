@@ -46,3 +46,30 @@ def test_rejects_invalid(kwargs):
     args = {"initial": 1_000, "monthly_contribution": 0, "years": 5, "expected_return": 0.05, "volatility": 0.1}
     with pytest.raises(ValueError):
         project_portfolio_value(**{**args, **kwargs})
+
+
+def test_all_percentiles_ordered():
+    projection = project_portfolio_value(20_000, 500, 15, 0.07, 0.14, ProjectionConfig(simulations=1500))
+    for p in projection.points[1:]:
+        assert p.p10 < p.p25 < p.p50 < p.p75 < p.p90
+    assert projection.final_p25 == projection.points[-1].p25 and projection.final_p75 == projection.points[-1].p75
+
+
+def test_probability_of_meeting_target():
+    cfg = ProjectionConfig(simulations=2000)
+    base = dict(initial=100_000, monthly_contribution=1_000, years=20, expected_return=0.07, volatility=0.15, config=cfg)
+    assert project_portfolio_value(**base).probability_of_meeting_target is None
+    assert project_portfolio_value(**base, target_amount=1_000).probability_of_meeting_target == 1.0
+    assert project_portfolio_value(**base, target_amount=1e9).probability_of_meeting_target == 0.0
+    median = project_portfolio_value(**base, target_amount=None).final_p50
+    mid = project_portfolio_value(**base, target_amount=median).probability_of_meeting_target
+    assert mid == pytest.approx(0.5, abs=0.01)
+    low = project_portfolio_value(**base, target_amount=median * 0.8).probability_of_meeting_target
+    assert low > mid
+
+
+def test_probability_zero_volatility_is_binary():
+    proj = project_portfolio_value(10_000, 0, 10, 0.05, 0.0, ProjectionConfig(simulations=10), target_amount=16_000)
+    assert proj.probability_of_meeting_target == 1.0  # 10,000 * 1.05^10 = 16,289
+    proj = project_portfolio_value(10_000, 0, 10, 0.05, 0.0, ProjectionConfig(simulations=10), target_amount=16_500)
+    assert proj.probability_of_meeting_target == 0.0

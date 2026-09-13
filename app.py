@@ -1,8 +1,6 @@
-import gradio as gr
+from portfolio_builder.ui import CSS, THEME, build_demo
 
-with gr.Blocks(title="AI Robo-Advisor Portfolio Builder") as demo:
-    gr.Markdown("# AI Robo-Advisor Portfolio Builder")
-    gr.Markdown("Coming soon.")
+demo = build_demo()
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(theme=THEME, css=CSS)

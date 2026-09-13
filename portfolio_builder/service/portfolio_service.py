@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from pydantic import ValidationError
 
+from ..backtest import BENCHMARK_KEY, BacktestConfig, BacktestError, Backtester, BacktestResult
 from ..market_data import MarketDataError
 from ..optimization import (
     CASH,
@@ -21,14 +22,19 @@ from ..optimization import (
     PortfolioOptimizationEngine,
     get_optimization_engine,
 )
-from ..universe import get_asset_class, get_asset_class_for_ticker
+from ..universe import get_asset_class, get_asset_class_for_ticker, get_asset_classes
 from .frontier_position import locate_on_frontier
 from .projection import ProjectionConfig, project_portfolio_value
-from .recommendations import build_notes
+from .recommendations import build_notes, input_warnings
 from .risk import RiskLevel, horizon_adjusted_risk, risk_band
 from .schemas import (
     AssetClassAllocation,
+    AssetClassPoint,
+    BacktestData,
+    BacktestMetricsData,
+    BacktestPoint,
     EfficientFrontierData,
+    ProxyUsage,
     FrontierPoint,
     Holding,
     MarketDataSummary,
@@ -51,7 +57,11 @@ METHOD_TEXT = {
         "Highest expected return on the efficient frontier for a volatility target set by risk tolerance.",
     ),
 }
+BENCHMARK_TICKER = "SPY"
+BENCHMARK_LABEL = "S&P 500 (SPY)"
+_BACKTEST_LABELS = {"rule_based": "Rule-based", "mean_variance": "Mean-variance", BENCHMARK_KEY: BENCHMARK_LABEL}
 _RANGE_ERRORS = {"greater_than_equal", "less_than_equal", "int_parsing", "float_parsing", "int_from_float",
+                 "int_type", "float_type", "missing",
                  "greater_than", "less_than", "finite_number"}
 
 
@@ -74,6 +84,7 @@ class PortfolioService:
         projection: ProjectionConfig | None = None,
     ) -> None:
         self._engine = engine
+        self._backtester: Backtester | None = None
         self.projection = projection or ProjectionConfig()
         self._lock = threading.Lock()
 
@@ -82,6 +93,12 @@ class PortfolioService:
         if self._engine is None:
             self._engine = get_optimization_engine()
         return self._engine
+
+    @property
+    def backtester(self) -> Backtester:
+        if self._backtester is None:
+            self._backtester = Backtester(self.engine.market_data)
+        return self._backtester
 
     @staticmethod
     def get_form_options() -> dict[str, dict[str, Any]]:
@@ -109,7 +126,13 @@ class PortfolioService:
                 mvo = self.engine.optimize("mean_variance", profile, inputs=inputs)
                 names = self._fund_names([*rule.weights.index, *mvo.weights.index])
                 data_as_of = self._data_as_of()
-        except (OptimizationError, MarketDataError) as exc:
+                backtest = self.backtester.run(
+                    {"rule_based": rule.weights, "mean_variance": mvo.weights},
+                    BacktestConfig(years=req.backtest_years, rebalance=req.rebalance,
+                                   benchmark=BENCHMARK_TICKER, risk_free_rate=inputs.risk_free_rate),
+                    initial_value=req.initial_investment,
+                )
+        except (OptimizationError, MarketDataError, BacktestError) as exc:
             raise PortfolioServiceError(f"Could not build a portfolio: {exc}") from exc
 
         if mvo.frontier is None:
@@ -130,15 +153,21 @@ class PortfolioService:
         )
         rule_rec = self._recommendation("rule_based", rule, req, names, frontier_points)
         mvo_rec = self._recommendation("mean_variance", mvo, req, names, frontier_points)
+        rule_rec.max_drawdown = backtest.metrics["rule_based"].max_drawdown
+        mvo_rec.max_drawdown = backtest.metrics["mean_variance"].max_drawdown
 
+        frontier = _frontier_data(mvo, rule_rec, mvo_rec)
+        frontier.asset_class_points = _asset_class_points(inputs)
         return PortfolioResponse(
             request=req,
             profile=summary,
             market_data=_market_summary(inputs, data_as_of),
             rule_based=rule_rec,
             mean_variance=mvo_rec,
-            efficient_frontier=_frontier_data(mvo, rule_rec, mvo_rec),
+            efficient_frontier=frontier,
+            backtest=_backtest_data(backtest, inputs.risk_free_rate),
             notes=build_notes(req, summary, rule_rec, mvo_rec),
+            warnings=input_warnings(req, summary, rule_rec, mvo_rec),
             generated_at=datetime.now(timezone.utc).replace(microsecond=0),
         )
 
@@ -179,7 +208,8 @@ class PortfolioService:
             asset_classes=sorted(classes.values(), key=lambda a: -a.weight),
             frontier_position=locate_on_frontier(m.volatility, m.expected_return, frontier_points),
             projection=project_portfolio_value(req.initial_investment, req.monthly_contribution, req.horizon_years,
-                                               m.expected_return, m.volatility, self.projection),
+                                               m.expected_return, m.volatility, self.projection,
+                                               target_amount=req.resolved_target),
             details=_json_safe({k: v for k, v in result.details.items() if k != "estimation_window"}),
         )
 
@@ -238,6 +268,74 @@ def _frontier_data(mvo: AllocationResult, rule_rec: PortfolioRecommendation,
                                     volatility=mvo_rec.volatility),
         rule_based_point=PortfolioPoint(label=rule_rec.title, expected_return=rule_rec.expected_return,
                                         volatility=rule_rec.volatility),
+    )
+
+
+def _asset_class_points(inputs: MarketInputs) -> list[AssetClassPoint]:
+    """Equal-weight blend of each asset class's funds, plus Cash at the risk-free rate."""
+    mu, cov = inputs.expected_returns, inputs.covariance
+    points = []
+    for ac in get_asset_classes():
+        tickers = [t for t in ac.tickers if t in inputs.tickers]
+        if ac.key == "cash":
+            points.append(AssetClassPoint(asset_class=ac.name, tickers=[CASH],
+                                          expected_return=inputs.risk_free_rate, volatility=0.0))
+            continue
+        if not tickers:
+            continue
+        w = np.full(len(tickers), 1.0 / len(tickers))
+        sub_cov = cov.loc[tickers, tickers].to_numpy()
+        points.append(AssetClassPoint(
+            asset_class=ac.name,
+            tickers=tickers,
+            expected_return=float(w @ mu[tickers].to_numpy()),
+            volatility=float(np.sqrt(w @ sub_cov @ w)),
+        ))
+    return points
+
+
+def _backtest_data(result: BacktestResult, risk_free_rate: float) -> BacktestData:
+    """Weekly-sampled series (last value, deepest drawdown of the week) plus full-resolution metrics."""
+    weekly_values = result.values.resample("W-FRI").last()
+    weekly_dd = result.drawdowns.resample("W-FRI").min()
+    # Label each week by its last actual trading day so the final point is the true end date.
+    last_days = result.values.index.to_series().resample("W-FRI").last()
+    keep = last_days.notna()
+    points = [
+        BacktestPoint(
+            date=last_days[week].date().isoformat(),
+            rule_based=round(float(weekly_values.at[week, "rule_based"]), 2),
+            mean_variance=round(float(weekly_values.at[week, "mean_variance"]), 2),
+            benchmark=round(float(weekly_values.at[week, BENCHMARK_KEY]), 2),
+            rule_based_drawdown=float(weekly_dd.at[week, "rule_based"]),
+            mean_variance_drawdown=float(weekly_dd.at[week, "mean_variance"]),
+            benchmark_drawdown=float(weekly_dd.at[week, BENCHMARK_KEY]),
+        )
+        for week in weekly_values.index[keep.to_numpy()]
+    ]
+    first = result.values.index[0]
+    if points and points[0].date != first.date().isoformat():
+        points.insert(0, BacktestPoint(date=first.date().isoformat(), rule_based=result.initial_value,
+                                       mean_variance=result.initial_value, benchmark=result.initial_value,
+                                       rule_based_drawdown=0.0, mean_variance_drawdown=0.0, benchmark_drawdown=0.0))
+    notes = list(result.notes)
+    notes.append(
+        f"The backtest grows the initial investment only (no contributions), ignores fees and taxes, rebalances "
+        f"{result.rebalance}, and assumes cash earns a constant {risk_free_rate:.1%} per year."
+    )
+    return BacktestData(
+        start=result.start.date().isoformat(),
+        end=result.end.date().isoformat(),
+        years_requested=result.years_requested,
+        years_covered=round(result.years_covered, 2),
+        rebalance=result.rebalance,
+        benchmark=result.benchmark,
+        benchmark_label=BENCHMARK_LABEL,
+        initial_value=result.initial_value,
+        points=points,
+        metrics={k: BacktestMetricsData(label=_BACKTEST_LABELS.get(k, k), **vars(m)) for k, m in result.metrics.items()},
+        proxies_used=[ProxyUsage(ticker=t, **v) for t, v in sorted(result.proxies_used.items())],
+        notes=notes,
     )
 
 
@@ -308,6 +406,9 @@ def recommend_portfolio(
     monthly_contribution: float,
     goal: str,
     age: int,
+    target_amount: float | None = None,
+    backtest_years: int = 15,
+    rebalance: str = "quarterly",
 ) -> PortfolioResponse:
     """Build both portfolios from UI form values (arguments in form order, e.g. Gradio inputs)."""
     return get_portfolio_service().build_portfolio(
@@ -318,5 +419,8 @@ def recommend_portfolio(
             "monthly_contribution": monthly_contribution,
             "goal": goal,
             "age": age,
+            "target_amount": target_amount,
+            "backtest_years": backtest_years,
+            "rebalance": rebalance,
         }
     )

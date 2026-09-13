@@ -7,6 +7,8 @@ import pandas as pd
 import pytest
 
 from portfolio_builder.market_data import MarketDataError, MarketDataService, ParquetCache
+from portfolio_builder.optimization import PortfolioOptimizationEngine
+from portfolio_builder.service import PortfolioService, ProjectionConfig
 
 
 def make_history(start: str = "2020-01-01", periods: int = 300, seed: int = 0, price: float = 100.0) -> pd.DataFrame:
@@ -77,3 +79,11 @@ def connector() -> FakeConnector:
 @pytest.fixture
 def service(connector, cache) -> MarketDataService:
     return MarketDataService(connector, cache)
+
+
+@pytest.fixture(scope="session")
+def portfolio_service(tmp_path_factory) -> PortfolioService:
+    """Service on ~5 years of synthetic data for all universe tickers (no network)."""
+    market = MarketDataService(LongHistoryConnector(), ParquetCache(tmp_path_factory.mktemp("cache")))
+    engine = PortfolioOptimizationEngine(market_data=market, risk_free_rate=0.02)
+    return PortfolioService(engine=engine, projection=ProjectionConfig(simulations=500))

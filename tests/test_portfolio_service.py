@@ -9,11 +9,10 @@ from portfolio_builder.service import (
     PortfolioResponse,
     PortfolioService,
     PortfolioServiceError,
-    ProjectionConfig,
 )
 from portfolio_builder.service import portfolio_service as ps
 
-from .conftest import FakeConnector, LongHistoryConnector
+from .conftest import FakeConnector
 
 REQUEST = {
     "risk_tolerance": "moderate",
@@ -23,13 +22,6 @@ REQUEST = {
     "goal": "retirement",
     "age": 45,
 }
-
-
-@pytest.fixture(scope="module")
-def portfolio_service(tmp_path_factory):
-    market = MarketDataService(LongHistoryConnector(), ParquetCache(tmp_path_factory.mktemp("cache")))
-    engine = PortfolioOptimizationEngine(market_data=market, risk_free_rate=0.02)
-    return PortfolioService(engine=engine, projection=ProjectionConfig(simulations=500))
 
 
 @pytest.fixture(scope="module")
@@ -137,3 +129,61 @@ def test_recommend_portfolio_uses_singleton(monkeypatch, portfolio_service):
     assert res.profile.effective_risk_tolerance == 8.0
     assert res.request.goal.value == "education"
     assert first.get_form_options()["age"]["maximum"] == 80
+
+
+def test_goal_probability_and_drawdown(response):
+    for rec in (response.rule_based, response.mean_variance):
+        assert rec.projection.target_amount == 1_500_000  # retirement default
+        assert 0.0 <= rec.probability_of_meeting_target <= 1.0
+        assert rec.max_drawdown is not None and rec.max_drawdown <= 0
+        p = rec.projection.points[-1]
+        assert p.p10 <= p.p25 <= p.p50 <= p.p75 <= p.p90
+
+
+def test_backtest_in_response(response):
+    bt = response.backtest
+    assert set(bt.metrics) == {"rule_based", "mean_variance", "benchmark"}
+    assert bt.metrics["benchmark"].label == "S&P 500 (SPY)" and bt.benchmark == "SPY"
+    assert bt.initial_value == 250_000 and bt.rebalance == "quarterly" and bt.years_requested == 15
+    assert bt.points[0].rule_based == 250_000 and bt.points[-1].date == bt.end
+    assert any("years of history" in n for n in bt.notes)  # test data covers ~5 years
+    assert response.rule_based.max_drawdown == bt.metrics["rule_based"].max_drawdown
+    frame = response.backtest_frame()
+    assert list(frame.columns[:4]) == ["date", "rule_based", "mean_variance", "benchmark"]
+    assert str(frame["date"].dtype).startswith("datetime64")
+
+
+def test_asset_class_points(response):
+    points = {p.asset_class: p for p in response.efficient_frontier.asset_class_points}
+    assert len(points) == 7
+    assert points["Cash and Money Markets"].volatility == 0
+    assert points["Cash and Money Markets"].expected_return == response.market_data.risk_free_rate
+    assert points["US large-cap stocks"].tickers == ["SPY", "VTI"]
+
+
+def test_explicit_target_and_warnings(portfolio_service):
+    far = portfolio_service.build_portfolio({**REQUEST, "target_amount": 90_000_000})
+    assert far.rule_based.probability_of_meeting_target == 0.0
+    assert any("hard to reach" in w for w in far.warnings)
+
+    met = portfolio_service.build_portfolio({**REQUEST, "target_amount": 100_000})
+    assert met.rule_based.probability_of_meeting_target == 1.0
+    assert any("already met" in w for w in met.warnings)
+
+    long_home = portfolio_service.build_portfolio({**REQUEST, "goal": "home_purchase", "horizon_years": 25, "age": 30})
+    assert any("unusually long" in w for w in long_home.warnings)
+
+    late = portfolio_service.build_portfolio({**REQUEST, "age": 60, "horizon_years": 25})
+    assert any("age 85" in w for w in late.warnings)
+
+    capped = portfolio_service.build_portfolio({**REQUEST, "risk_tolerance": "aggressive", "horizon_years": 1})
+    assert any("capped at 3" in w for w in capped.warnings)
+
+
+def test_backtest_settings_and_empty_number(portfolio_service):
+    res = portfolio_service.build_portfolio({**REQUEST, "backtest_years": 10, "rebalance": "monthly"})
+    assert (res.backtest.years_requested, res.backtest.rebalance) == (10, "monthly")
+    with pytest.raises(InputValidationError) as info:
+        portfolio_service.build_portfolio({**REQUEST, "monthly_contribution": None, "backtest_years": 25})
+    assert info.value.field_errors["monthly_contribution"] == "Monthly contribution ($) must be a number between 0 and 50,000"
+    assert "10 and 20" in info.value.field_errors["backtest_years"]
