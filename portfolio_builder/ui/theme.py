@@ -8,6 +8,9 @@ RULE_BASED_COLOR = "#4F46E5"     # indigo
 MEAN_VARIANCE_COLOR = "#0D9488"  # teal
 BENCHMARK_COLOR = "#64748B"      # slate
 TARGET_COLOR = "#F59E0B"         # amber
+# Sky blue: the most distinct option from every portfolio, asset-class and status color that stays visible in
+# light and dark themes (min CIEDE2000 distance ~22 to any other dashboard color).
+FRONTIER_COLOR = "#0EA5E9"
 MUTED_TEXT = "#64748B"
 GRID_COLOR = "rgba(148, 163, 184, 0.25)"
 

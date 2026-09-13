@@ -18,7 +18,7 @@ from portfolio_builder.ui.app import (
     sidebar_tooltips,
 )
 from portfolio_builder.ui.formatting import format_money, parse_money
-from portfolio_builder.ui.theme import ASSET_CLASS_COLORS, METHOD_COLORS
+from portfolio_builder.ui.theme import ASSET_CLASS_COLORS, FRONTIER_COLOR, METHOD_COLORS, TARGET_COLOR
 
 
 @pytest.fixture(scope="module")
@@ -49,6 +49,8 @@ def test_risk_return_scatter(response):
                      "Rule-based Lifecycle Portfolio", "Mean-variance Optimized Portfolio"]
     fig = charts.risk_return_scatter(response)
     assert len(fig.data[1].x) == 7  # 6 asset classes + cash
+    frontier = fig.data[0]
+    assert frontier.line.dash == "dash" and frontier.line.color == FRONTIER_COLOR
     assert fig.data[3].y[0] == response.rule_based.expected_return
 
 
@@ -153,6 +155,7 @@ def test_dashboard_update_valid_and_invalid(portfolio_service):
 
 def test_asset_palette_does_not_reuse_portfolio_colors():
     assert not set(ASSET_CLASS_COLORS.values()) & set(METHOD_COLORS.values())
+    assert FRONTIER_COLOR not in {*ASSET_CLASS_COLORS.values(), *METHOD_COLORS.values(), TARGET_COLOR}
     assert len(set(ASSET_CLASS_COLORS.values())) == len(ASSET_CLASS_COLORS)
 
 

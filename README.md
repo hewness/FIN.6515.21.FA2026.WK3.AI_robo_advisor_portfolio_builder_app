@@ -58,6 +58,7 @@ Invalid inputs are listed in a red status box in the sidebar, and the charts kee
 **Colors:**
 - Indigo, teal and slate always mean the rule-based portfolio, the mean-variance portfolio and the S&P 500 benchmark, in every widget.
 - Asset classes use their own palette so they never look like a portfolio: warm tones for stocks, greens for bonds, warm gray for cash.
+- The efficient frontier is a dashed sky-blue line, a color not used by any portfolio or asset class.
 
 **Backtest method** (`portfolio_builder/backtest`):
 - Daily total returns with fixed target weights. Holdings drift and reset at each rebalance date. Cash earns the risk-free rate.

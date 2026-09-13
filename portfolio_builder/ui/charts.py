@@ -11,6 +11,7 @@ from .theme import (
     ASSET_CLASS_COLORS,
     ASSET_CLASS_SHORT,
     BENCHMARK_COLOR,
+    FRONTIER_COLOR,
     GRID_COLOR,
     METHOD_COLORS,
     METHOD_LABELS,
@@ -105,7 +106,7 @@ def risk_return_scatter(resp: PortfolioResponse) -> go.Figure:
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=[p.volatility for p in ef.points], y=[p.expected_return for p in ef.points],
-        mode="lines", name="Efficient frontier", line=dict(color=_rgba(METHOD_COLORS["mean_variance"], 0.55), width=3),
+        mode="lines", name="Efficient frontier", line=dict(color=FRONTIER_COLOR, width=2.5, dash="dash"),
         customdata=[p.sharpe_ratio for p in ef.points],
         hovertemplate="Frontier<br>Return %{y:.2%} · Risk %{x:.2%}<br>Sharpe %{customdata:.2f}<extra></extra>",
     ))
