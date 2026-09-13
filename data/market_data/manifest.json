@@ -1,0 +1,90 @@
+{
+  "AGG": {
+    "downloaded_at": "2026-09-13T01:23:56+00:00",
+    "first_date": "2003-09-29",
+    "last_date": "2026-09-11",
+    "rows": 5775,
+    "source": "yfinance",
+    "source_version": "1.7.0"
+  },
+  "BND": {
+    "downloaded_at": "2026-09-13T01:23:57+00:00",
+    "first_date": "2007-04-10",
+    "last_date": "2026-09-11",
+    "rows": 4888,
+    "source": "yfinance",
+    "source_version": "1.7.0"
+  },
+  "EEM": {
+    "downloaded_at": "2026-09-13T01:23:55+00:00",
+    "first_date": "2003-04-14",
+    "last_date": "2026-09-11",
+    "rows": 5891,
+    "source": "yfinance",
+    "source_version": "1.7.0"
+  },
+  "EFA": {
+    "downloaded_at": "2026-09-13T01:23:55+00:00",
+    "first_date": "2001-08-27",
+    "last_date": "2026-09-11",
+    "rows": 6297,
+    "source": "yfinance",
+    "source_version": "1.7.0"
+  },
+  "SPY": {
+    "downloaded_at": "2026-09-13T01:24:11+00:00",
+    "first_date": "1993-01-29",
+    "last_date": "2026-09-11",
+    "rows": 8462,
+    "source": "yfinance",
+    "source_version": "1.7.0"
+  },
+  "TIP": {
+    "downloaded_at": "2026-09-13T01:23:57+00:00",
+    "first_date": "2003-12-05",
+    "last_date": "2026-09-11",
+    "rows": 5727,
+    "source": "yfinance",
+    "source_version": "1.7.0"
+  },
+  "VNQ": {
+    "downloaded_at": "2026-09-13T01:23:58+00:00",
+    "first_date": "2004-09-29",
+    "last_date": "2026-09-11",
+    "rows": 5523,
+    "source": "yfinance",
+    "source_version": "1.7.0"
+  },
+  "VTI": {
+    "downloaded_at": "2026-09-13T01:23:54+00:00",
+    "first_date": "2001-06-15",
+    "last_date": "2026-09-11",
+    "rows": 6347,
+    "source": "yfinance",
+    "source_version": "1.7.0"
+  },
+  "VTIP": {
+    "downloaded_at": "2026-09-13T01:23:57+00:00",
+    "first_date": "2012-10-16",
+    "last_date": "2026-09-11",
+    "rows": 3495,
+    "source": "yfinance",
+    "source_version": "1.7.0"
+  },
+  "VWO": {
+    "downloaded_at": "2026-09-13T01:23:56+00:00",
+    "first_date": "2005-03-10",
+    "last_date": "2026-09-11",
+    "rows": 5411,
+    "source": "yfinance",
+    "source_version": "1.7.0"
+  },
+  "VXUS": {
+    "downloaded_at": "2026-09-13T01:23:55+00:00",
+    "first_date": "2011-01-28",
+    "last_date": "2026-09-11",
+    "rows": 3928,
+    "source": "yfinance",
+    "source_version": "1.7.0"
+  }
+}

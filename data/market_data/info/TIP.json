@@ -1,0 +1,11 @@
+{
+  "category": "Inflation-Protected Bond",
+  "currency": "USD",
+  "fundFamily": "iShares",
+  "fundInceptionDate": 1070496000,
+  "longName": "iShares TIPS Bond ETF",
+  "netExpenseRatio": 0.18,
+  "quoteType": "ETF",
+  "totalAssets": 15010082816,
+  "yield": 0.0498
+}

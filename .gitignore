@@ -5,3 +5,5 @@ __pycache__/
 flagged/
 .env
 .DS_Store
+.pytest_cache/
+*.tmp

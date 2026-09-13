@@ -1,0 +1,11 @@
+{
+  "category": "Intermediate Core Bond",
+  "currency": "USD",
+  "fundFamily": "iShares",
+  "fundInceptionDate": 1064188800,
+  "longName": "iShares Core U.S. Aggregate Bond ETF",
+  "netExpenseRatio": 0.03,
+  "quoteType": "ETF",
+  "totalAssets": 138317873152,
+  "yield": 0.0405
+}
