@@ -235,9 +235,18 @@ def test_about_you_fields_are_inline(portfolio_service):
 
     demo = build_demo(portfolio_service)
     by_id = {b.elem_id: b for b in demo.blocks.values() if getattr(b, "elem_id", None)}
-    for elem_id in ("in-age", "in-goal", "in-target"):
+    for elem_id in ("in-age", "in-goal", "in-target", "in-risk-preset"):
         classes = by_id[elem_id].elem_classes
         assert "inline-field" in (classes if isinstance(classes, list) else [classes])
     assert "money-input" in by_id["in-target"].elem_classes  # still formats as money
     assert "inline-field" not in (by_id["in-initial"].elem_classes or [])  # other fields keep the stacked layout
     assert ".inline-field > .container" in CSS and "flex-direction: row" in CSS
+
+
+
+def test_risk_tolerance_is_inline_dropdown(portfolio_service):
+    demo = build_demo(portfolio_service)
+    preset = next(b for b in demo.blocks.values() if getattr(b, "elem_id", None) == "in-risk-preset")
+    assert isinstance(preset, gr.Dropdown)
+    assert [c[0] for c in preset.choices] == ["Conservative", "Moderate", "Aggressive", "Custom"]
+    assert preset.value == "Moderate"

@@ -37,7 +37,7 @@ Then open http://127.0.0.1:7860.
 | | Financial goal | Dropdown | Retirement / Home purchase / Education / General wealth | Retirement |
 | | Goal target | Money text | $1,000–$100M; resets to the goal's default when the goal changes | $1.5M (home $150k, education $200k, general $1M) |
 | Risk profile | Hump-shaped equity glide path | Checkbox | On / Off | On |
-| | Risk tolerance | Preset (Conservative / Moderate / Aggressive / Custom) + 1–10 slider | presets = 3 / 5.5 / 8 | Moderate (5.5) |
+| | Risk tolerance | Dropdown (Conservative / Moderate / Aggressive / Custom) + 1–10 slider | presets = 3 / 5.5 / 8 | Moderate (5.5) |
 | Investment plan | Initial investment | Money text | $1,000–$10,000,000 | $50,000 |
 | | Monthly contribution | Money text | $0–$50,000 | $1,000 |
 | | Investment horizon | Slider | 1–30 years | 25 |

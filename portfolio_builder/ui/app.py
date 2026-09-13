@@ -147,8 +147,9 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
             gr.Markdown("### Risk profile", elem_classes="sb-section")
             glide = gr.Checkbox(label="Hump-shaped equity glide path", value=defaults["hump_glide_path"],
                                 elem_id="in-glide-path", elem_classes="glide-toggle")
-            risk_preset = gr.Radio(label="Risk tolerance", choices=[*PRESETS, CUSTOM],
-                                   value=preset_for(defaults["risk_tolerance"]), elem_id="in-risk-preset")
+            risk_preset = gr.Dropdown(label="Risk tolerance", choices=[*PRESETS, CUSTOM],
+                                      value=preset_for(defaults["risk_tolerance"]), elem_id="in-risk-preset",
+                                      elem_classes="inline-field")
             risk = gr.Slider(label="Risk score", minimum=opts["risk_tolerance"]["minimum"],
                              maximum=opts["risk_tolerance"]["maximum"], step=opts["risk_tolerance"]["step"],
                              value=defaults["risk_tolerance"], elem_id="in-risk")
