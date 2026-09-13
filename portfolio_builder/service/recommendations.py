@@ -111,9 +111,16 @@ def build_notes(
             f"{min(share, 1):.0%} of the ${projection.final_p50:,.0f} ending value; the rest is investment growth."
         )
 
-    notes.append(
-        "Projections are simulations based on historical estimates, not guarantees. Actual returns will differ."
-    )
+    if projection.method == "simple_percentiles":
+        notes.append(
+            "Projections use simple percentiles: your money grows at constant percentile returns from the return "
+            "distribution for each horizon (no simulation). They are estimates, not guarantees. Actual returns will differ."
+        )
+    else:
+        notes.append(
+            f"Projections are {projection.simulations:,} Monte Carlo simulations based on historical estimates, not "
+            "guarantees. Actual returns will differ."
+        )
     return notes
 
 

@@ -71,14 +71,38 @@ def test_wealth_projection_per_portfolio_on_shared_scale(response):
     for method in METHODS:
         fig = charts.wealth_projection(response, method, y_max)
         names = set(trace_names(fig))
-        assert {"Expected (mean)", "Optimistic (75th pct)", "Pessimistic (25th pct)", "Total contributed"} <= names
+        assert {"Median", "Expected (mean)", "10th–90th pct", "25th–75th pct", "Total contributed"} <= names
+        assert "30 sample paths" in names
+        samples = [t for t in fig.data if t.legendgroup == "samples"]
+        assert len(samples) == 30 and sum(bool(t.showlegend) for t in samples) == 1
         expected = next(t for t in fig.data if t.name == "Expected (mean)")
         assert len(expected.x) == response.request.horizon_years + 1
         assert expected.line.color == METHOD_COLORS[method]
         assert tuple(fig.layout.yaxis.range) == (0, y_max)
         assert any("Goal" in (a.text or "") for a in fig.layout.annotations)
-    highest = max(p.p75 for m in METHODS for p in response.recommendation(m).projection.points)
-    assert y_max >= highest
+    highest = max(p.p90 for m in METHODS for p in response.recommendation(m).projection.points)
+    assert y_max >= highest  # Monte Carlo scale covers the 90th percentile band
+
+
+def test_simple_percentile_wealth_chart_and_labels(portfolio_service, response):
+    simple = portfolio_service.build_portfolio({**default_values(), "projection_method": "simple_percentiles"})
+    y_max = charts.wealth_y_max(simple)
+    assert y_max >= max(p.p75 for m in METHODS for p in simple.recommendation(m).projection.points)
+    fig = charts.wealth_projection(simple, "research_informed", y_max)
+    names = set(trace_names(fig))
+    assert {"Expected (mean)", "Optimistic (75th pct)", "Pessimistic (25th pct)", "Total contributed"} <= names
+    assert "Median" not in names and not any("sample paths" in (n or "") for n in names)
+    assert fig.data[2].line.color == METHOD_COLORS["research_informed"]
+    assert components.wealth_caption(simple, "rule_based").startswith("Simple percentiles:")
+    sims = response.rule_based.projection.simulations
+    assert components.wealth_caption(response, "rule_based").startswith(f"Monte Carlo: {sims:,} simulated")
+    for resp_, caption_end in ((simple, "Same scale in all cards."), (response, "Same scale in all cards.")):
+        assert components.wealth_caption(resp_, "mean_variance").endswith(caption_end)
+    assert "Simple percentiles</b> projection" in components.profile_chips(simple)
+    assert "Monte Carlo</b> projection" in components.profile_chips(response)
+    assert "no simulation" in components.summary_header(simple, "rule_based")
+    assert "simulated outcomes" in components.summary_header(response, "rule_based")
+    assert "Simple-percentile projections" in components.notes_markdown(simple)
 
 
 def test_backtest_chart(response):
@@ -159,7 +183,8 @@ def test_dashboard_update_valid_and_invalid(portfolio_service):
     dashboard = Dashboard(portfolio_service)
     values = default_values()
     out = dict(zip(OUTPUT_KEYS, dashboard.update(*[values[f] for f in INPUT_FIELDS])))
-    assert len(out) == len(OUTPUT_KEYS) == 19
+    assert len(out) == len(OUTPUT_KEYS) == 22
+    assert out["wealth_caption_rule_based"].startswith("Monte Carlo")
     assert "Research vs. Popular Wisdom" in out["insight"]
     assert "status" in out["status"]
     for method in METHODS:
@@ -306,3 +331,12 @@ def test_uncapped_research_card_has_no_cap_note(portfolio_service):
     html = components.summary_header(resp, "research_informed")
     assert components.equity_cap_note(resp, "research_informed") is None
     assert "Capped" not in html and "class='basis'" in html and resp.research_informed.description[:20] in html
+
+
+def test_projection_dropdown_in_sidebar(portfolio_service):
+    demo = build_demo(portfolio_service)
+    dropdown = next(b for b in demo.blocks.values() if getattr(b, "elem_id", None) == "in-projection")
+    assert isinstance(dropdown, gr.Dropdown) and "inline-field" in (dropdown.elem_classes or [])
+    assert [tuple(c) for c in dropdown.choices] == [("Monte Carlo", "monte_carlo"), ("Simple percentiles", "simple_percentiles")]
+    assert dropdown.value == "monte_carlo" and default_values()["projection_method"] == "monte_carlo"
+    assert "projection_method" in INPUT_FIELDS and "Monte Carlo" in sidebar_tooltips()["in-projection"]

@@ -86,7 +86,10 @@ def test_form_options_match_model():
     options = get_form_options()
     assert list(options) == ["risk_tolerance", "horizon_years", "initial_investment", "monthly_contribution", "goal",
                              "age", "target_amount", "backtest_years", "rebalance", "hump_glide_path",
-                             "annual_income", "retirement_income", "retirement_age"]
+                             "annual_income", "retirement_income", "retirement_age", "projection_method"]
+    assert options["projection_method"]["default"] == "monte_carlo"
+    assert options["projection_method"]["choices"] == [{"value": "monte_carlo", "label": "Monte Carlo"},
+                                                       {"value": "simple_percentiles", "label": "Simple percentiles"}]
     assert options["annual_income"]["default"] == 85_000 and options["retirement_income"]["default"] is None
     assert options["retirement_income"]["default_rate"] == 0.4
     assert options["hump_glide_path"]["default"] is True and options["hump_glide_path"]["widget"] == "checkbox"
@@ -107,3 +110,15 @@ def test_form_options_match_model():
 def test_hump_glide_path_coercion(value, expected):
     assert PortfolioRequest(hump_glide_path=value).hump_glide_path is expected
     assert PortfolioRequest().hump_glide_path is True
+
+
+@pytest.mark.parametrize("value,expected", [("monte_carlo", "monte_carlo"), ("Monte Carlo", "monte_carlo"),
+                                            ("simple_percentiles", "simple_percentiles"),
+                                            ("Simple percentiles", "simple_percentiles"), (" SIMPLE PERCENTILES ", "simple_percentiles")])
+def test_projection_method_accepts_values_and_labels(value, expected):
+    assert PortfolioRequest(projection_method=value).projection_method == expected
+
+
+def test_projection_method_rejects_unknown():
+    with pytest.raises(ValidationError):
+        PortfolioRequest(projection_method="bootstrap")

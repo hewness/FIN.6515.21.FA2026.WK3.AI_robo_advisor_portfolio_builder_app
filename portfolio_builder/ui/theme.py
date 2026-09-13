@@ -229,6 +229,9 @@ footer { display: none !important; }
                              gap: .6rem !important; }
 .inline-field > .container > [data-testid="block-info"] { flex: 0 0 var(--inline-label-width);
                                                           width: var(--inline-label-width); margin: 0 !important; }
+/* Dropdown values like "Simple percentiles" need the full width: slimmer padding and a 13px value font. */
+.inline-field .wrap-inner { padding-left: 8px !important; padding-right: 6px !important; gap: 2px !important; }
+.inline-field .wrap-inner input { font-size: 13px !important; }
 .inline-field > .container > input, .inline-field > .container > .input-container,
 .inline-field > .container > .wrap { flex: 1 1 auto; min-width: 0; margin: 0 !important; }
 .inline-slider .head { display: grid !important; grid-template-columns: var(--inline-label-width) minmax(0, 1fr);

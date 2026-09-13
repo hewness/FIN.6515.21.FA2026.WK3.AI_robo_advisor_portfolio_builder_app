@@ -25,7 +25,7 @@ def _print_recommendation(rec: PortfolioRecommendation) -> None:
     print(f"frontier: on_frontier={fp.on_frontier} gap={fp.return_gap:+.2%} position={fp.position:.2f}"
           + (f" | {fp.note}" if fp.note else ""))
     p = rec.projection
-    print(f"projection after {p.points[-1].year} years (contributed ${p.total_contributed:,.0f}): "
+    print(f"{p.method} projection after {p.points[-1].year} years (contributed ${p.total_contributed:,.0f}): "
           f"p25 ${p.final_p25:,.0f} | median ${p.final_p50:,.0f} | p75 ${p.final_p75:,.0f} | expected ${p.final_expected:,.0f}")
     print(f"probability of reaching ${p.target_amount:,.0f}: {p.probability_of_meeting_target:.0%} | "
           f"max historical drawdown {rec.max_drawdown:.1%}")
@@ -50,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--retirement-income", type=float,
                         help="Social Security + pensions per year (default 40%% of income)")
     parser.add_argument("--retirement-age", type=int, default=d["retirement_age"], help="Retirement age (50-75)")
+    parser.add_argument("--projection", choices=("monte_carlo", "simple_percentiles"), default=d["projection_method"],
+                        help="Wealth projection method (default monte_carlo)")
     parser.add_argument("--json", action="store_true", help="Print the full response as JSON")
     args = parser.parse_args(argv)
 
@@ -61,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
             "target_amount": args.target, "backtest_years": args.backtest_years, "rebalance": args.rebalance,
             "hump_glide_path": args.glide_path == "hump", "annual_income": args.income,
             "retirement_income": args.retirement_income, "retirement_age": args.retirement_age,
+            "projection_method": args.projection,
         })
     except InputValidationError as exc:
         for field, message in exc.field_errors.items():

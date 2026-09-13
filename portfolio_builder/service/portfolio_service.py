@@ -37,6 +37,7 @@ from .schemas import (
     BacktestMetricsData,
     BacktestPoint,
     METHODS,
+    PROJECTION_LABELS,
     EfficientFrontierData,
     ProxyUsage,
     FrontierPoint,
@@ -187,6 +188,7 @@ class PortfolioService:
             retirement_age=req.retirement_age,
             human_capital=float(research.details["human_capital"]),
             research_equity_target=float(research.details["equity_pct"]),
+            projection_method=PROJECTION_LABELS[req.projection_method],
         )
         recs = {method: self._recommendation(method, result, req, names, frontier_points, inputs)
                 for method, result in results.items()}
@@ -259,7 +261,7 @@ class PortfolioService:
             frontier_position=locate_on_frontier(m.volatility, m.expected_return, frontier_points),
             projection=project_portfolio_value(req.initial_investment, req.monthly_contribution, req.horizon_years,
                                                m.expected_return, m.volatility, self.projection,
-                                               target_amount=req.resolved_target),
+                                               target_amount=req.resolved_target, method=req.projection_method),
             details=_json_safe({k: v for k, v in result.details.items() if k != "estimation_window"}),
         )
 
@@ -409,7 +411,7 @@ def _field_errors(exc: ValidationError) -> dict[str, str]:
             errors[field] = f"Unknown input '{field}'" if err["type"] == "extra_forbidden" else err["msg"]
         elif err["type"] in _RANGE_ERRORS and opt.get("minimum") is not None:
             errors[field] = f"{opt['label']} must be a number between {opt['minimum']:,} and {opt['maximum']:,}"
-        elif "choices" in opt and err["type"] in {"enum", "value_error"}:
+        elif "choices" in opt and err["type"] in {"enum", "value_error", "literal_error"}:
             labels = ", ".join(c["label"] for c in opt["choices"])
             prefix = "a number from 1 to 10 or one of: " if field == "risk_tolerance" else "one of: "
             errors[field] = f"{opt['label']} must be {prefix}{labels}"
@@ -459,6 +461,7 @@ def recommend_portfolio(
     annual_income: float = 85_000,
     retirement_income: float | None = None,
     retirement_age: int = 67,
+    projection_method: str = "monte_carlo",
 ) -> PortfolioResponse:
     """Build all three portfolios from UI form values (arguments in form order, e.g. Gradio inputs)."""
     return get_portfolio_service().build_portfolio(
@@ -476,5 +479,6 @@ def recommend_portfolio(
             "annual_income": annual_income,
             "retirement_income": retirement_income,
             "retirement_age": retirement_age,
+            "projection_method": projection_method,
         }
     )

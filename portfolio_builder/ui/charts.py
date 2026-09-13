@@ -148,30 +148,27 @@ def risk_return_scatter(resp: PortfolioResponse) -> go.Figure:
 
 def wealth_y_max(resp: PortfolioResponse) -> float:
     """Common y-axis top for every portfolio's projection so the cards are directly comparable."""
-    highs = [p.p75 for m in METHODS for p in resp.recommendation(m).projection.points]
+    # Monte Carlo draws the 10th-90th band, simple percentiles top out at the 75th percentile line.
+    key = "p90" if resp.rule_based.projection.method == "monte_carlo" else "p75"
+    highs = [getattr(p, key) for m in METHODS for p in resp.recommendation(m).projection.points]
     target = resp.rule_based.projection.target_amount or 0.0
     return max(max(highs), target) * 1.08
 
 
 def wealth_projection(resp: PortfolioResponse, method: str, y_max: float | None = None) -> go.Figure:
-    """One portfolio's projected value: expected (mean), optimistic (p75) and pessimistic (p25) paths."""
+    """One portfolio's projected value, drawn for its projection method.
+
+    Monte Carlo: sample paths, 10th-90th and 25th-75th percentile bands, median and mean.
+    Simple percentiles: expected path with optimistic (75th) and pessimistic (25th) lines from the formula.
+    """
     proj = resp.recommendation(method).projection
     color = METHOD_COLORS[method]
     years = [p.year for p in proj.points]
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=years, y=[p.p75 for p in proj.points], mode="lines", line=dict(width=0),
-                             showlegend=False, hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=years, y=[p.p25 for p in proj.points], mode="lines", line=dict(width=0),
-                             fill="tonexty", fillcolor=_rgba(color, 0.14), name="25th–75th pct range",
-                             hoverinfo="skip"))
-    for key, label, dash, width in (("p75", "Optimistic (75th pct)", "dash", 2),
-                                    ("expected", "Expected (mean)", "solid", 3),
-                                    ("p25", "Pessimistic (25th pct)", "dot", 2)):
-        fig.add_trace(go.Scatter(
-            x=years, y=[getattr(p, key) for p in proj.points], mode="lines", name=label,
-            line=dict(color=color, dash=dash, width=width),
-            hovertemplate=f"{label}: $%{{y:,.0f}}<extra></extra>",
-        ))
+    if proj.method == "monte_carlo":
+        _monte_carlo_traces(fig, proj, years, color)
+    else:
+        _simple_percentile_traces(fig, proj, years, color)
     fig.add_trace(go.Scatter(
         x=years, y=[p.total_contributed for p in proj.points], mode="lines", name="Total contributed",
         line=dict(color=BENCHMARK_COLOR, dash="dashdot", width=1.5),
@@ -189,8 +186,52 @@ def wealth_projection(resp: PortfolioResponse, method: str, y_max: float | None 
     fig.update_yaxes(tickprefix="$", tickformat="~s", range=[0, y_max] if y_max else None)
     fig.update_layout(hovermode="x unified")
     _style(fig, height=330, legend_y=-0.24)
-    fig.update_layout(margin=dict(l=8, r=8, t=12, b=8), legend=dict(font=dict(size=10.5)))
+    # Two legend columns in both modes, in trace order, so the cards read the same way whichever method is on.
+    fig.update_layout(margin=dict(l=8, r=8, t=12, b=8),
+                      legend=dict(font=dict(size=10.5), traceorder="normal", entrywidth=0.5, entrywidthmode="fraction"))
     return fig
+
+
+def _monte_carlo_traces(fig: go.Figure, proj, years: list[int], color: str) -> None:
+    for i, path in enumerate(proj.sample_paths):
+        fig.add_trace(go.Scatter(
+            x=years, y=path, mode="lines", line=dict(color=_rgba(color, 0.16), width=1),
+            name=f"{len(proj.sample_paths)} sample paths", legendgroup="samples",
+            showlegend=i == 0, hoverinfo="skip",
+        ))
+    for low, high, label, alpha in (("p10", "p90", "10th–90th pct", 0.10), ("p25", "p75", "25th–75th pct", 0.22)):
+        lows, highs = [getattr(p, low) for p in proj.points], [getattr(p, high) for p in proj.points]
+        fig.add_trace(go.Scatter(x=years, y=highs, mode="lines", line=dict(width=0), showlegend=False,
+                                 hoverinfo="skip"))
+        fig.add_trace(go.Scatter(
+            x=years, y=lows, mode="lines", line=dict(width=0), fill="tonexty", fillcolor=_rgba(color, alpha),
+            name=label, customdata=list(zip(lows, highs)),
+            hovertemplate=f"{label}: $%{{customdata[0]:,.0f}} – $%{{customdata[1]:,.0f}}<extra></extra>",
+        ))
+    fig.add_trace(go.Scatter(
+        x=years, y=[p.p50 for p in proj.points], mode="lines", name="Median", line=dict(color=color, width=3),
+        hovertemplate="Median: $%{y:,.0f}<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=years, y=[p.expected for p in proj.points], mode="lines", name="Expected (mean)",
+        line=dict(color=color, dash="dash", width=1.5), hovertemplate="Expected (mean): $%{y:,.0f}<extra></extra>",
+    ))
+
+
+def _simple_percentile_traces(fig: go.Figure, proj, years: list[int], color: str) -> None:
+    fig.add_trace(go.Scatter(x=years, y=[p.p75 for p in proj.points], mode="lines", line=dict(width=0),
+                             showlegend=False, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=years, y=[p.p25 for p in proj.points], mode="lines", line=dict(width=0),
+                             fill="tonexty", fillcolor=_rgba(color, 0.14), name="25th–75th pct range",
+                             hoverinfo="skip"))
+    for key, label, dash, width in (("p75", "Optimistic (75th pct)", "dash", 2),
+                                    ("expected", "Expected (mean)", "solid", 3),
+                                    ("p25", "Pessimistic (25th pct)", "dot", 2)):
+        fig.add_trace(go.Scatter(
+            x=years, y=[getattr(p, key) for p in proj.points], mode="lines", name=label,
+            line=dict(color=color, dash=dash, width=width),
+            hovertemplate=f"{label}, formula: $%{{y:,.0f}}<extra></extra>",
+        ))
 
 
 def backtest_chart(resp: PortfolioResponse) -> go.Figure:

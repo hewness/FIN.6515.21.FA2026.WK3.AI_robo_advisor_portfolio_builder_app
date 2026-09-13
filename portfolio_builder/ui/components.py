@@ -19,6 +19,7 @@ from .theme import (
     METHODS,
     POPULAR_RULE_COLOR,
 )
+PROJECTION_ICONS = {"Monte Carlo": "🎲", "Simple percentiles": "📐"}
 HOLDINGS_COLUMNS = [" ", "Ticker", "Asset class", "Exp. ret.", "Weight", "Amount"]
 HOLDINGS_DATATYPES = ["html", "str", "str", "str", "str", "str"]
 
@@ -56,8 +57,11 @@ def _card(resp: PortfolioResponse, method: str) -> str:
               f"({resp.backtest.start} to {resp.backtest.end}).", "neg"),
         _tile("Goal odds", f"{prob:.0%}" if prob is not None else "—",
               f"{_money_short(proj.target_amount)} by {end_age}" if proj.target_amount else "",
-              f"Probability of reaching ${proj.target_amount or 0:,.0f} by age {end_age}: share of "
-              f"{proj.simulations:,} simulated outcomes that end at or above the goal target.",
+              f"Probability of reaching ${proj.target_amount or 0:,.0f} by age {end_age}: "
+              + (f"share of {proj.simulations:,} simulated outcomes that end at or above the goal target."
+                 if proj.method == "monte_carlo" else
+                 "chance the annualized return over your horizon beats the constant return needed to reach the "
+                 "goal (simple percentiles, no simulation)."),
               _probability_class(prob)),
     ]
     color = METHOD_COLORS[method]
@@ -116,6 +120,20 @@ def equity_cap_note(resp: PortfolioResponse, method: str) -> str | None:
             "age or horizon changes won't move it.")
 
 
+def wealth_caption_text(projection_method: str, simulations: int = 5000) -> str:
+    """Caption under a card's Projected Wealth title; both methods end the same way so the cards stay aligned."""
+    if projection_method == "simple_percentiles":
+        body = "Simple percentiles: steady growth at the expected and 25th/75th-percentile returns (no simulation)."
+    else:
+        body = f"Monte Carlo: {simulations:,} simulated paths; bands span the 10th–90th and 25th–75th percentiles."
+    return f"{body} Same scale in all cards."
+
+
+def wealth_caption(resp: PortfolioResponse, method: str) -> str:
+    proj = resp.recommendation(method).projection
+    return wealth_caption_text(proj.method, proj.simulations or 5000)
+
+
 def summary_header(resp: PortfolioResponse, method: str) -> str:
     """Title and KPI tiles at the top of a portfolio's summary card."""
     return _card(resp, method)
@@ -133,6 +151,7 @@ def profile_chips(resp: PortfolioResponse) -> str:
         (f"📈 {escape(p.glide_path)} glide path · <b>{p.equity_target:.0%}</b> equity"
          if p.equity_target is not None else f"📈 {escape(p.glide_path)} glide path"),
         (f"💼 Human capital <b>{money(p.human_capital)}</b>" if p.human_capital is not None else ""),
+        f"{PROJECTION_ICONS.get(p.projection_method, '📊')} <b>{escape(p.projection_method)}</b> projection",
         f"🎚️ {risk} · {escape(p.risk_band)}",
         f"📅 Data as of <b>{escape(resp.market_data.data_as_of or '—')}</b>",
     ]
@@ -247,8 +266,13 @@ def notes_markdown(resp: PortfolioResponse) -> str:
         f"({md.estimation_start} to {md.estimation_end}); the risk-free rate is {md.risk_free_rate:.1%}.",
         f"- Your {resp.profile.horizon_years}-year horizon sets the effective risk level: "
         f"{resp.profile.horizon_adjustment}.",
-        f"- Projections use {resp.rule_based.projection.simulations:,} simulated return paths with monthly "
-        "contributions added after each month's growth.",
+        (f"- Monte Carlo projections use {resp.rule_based.projection.simulations:,} simulated month-by-month return "
+         "paths, with monthly contributions added after each month's growth; goal odds are the share of paths that "
+         "reach the target."
+         if resp.rule_based.projection.method == "monte_carlo" else
+         "- Simple-percentile projections grow the initial investment and monthly contributions at constant "
+         "percentile returns of the lognormal return distribution for each horizon (no simulation); goal odds are "
+         "the chance the horizon's annualized return beats the return needed to reach the target."),
         "- Mean-variance weights are estimated on history that overlaps the backtest, so its backtest is in-sample.",
         "- The research-informed equity share uses long-run research assumptions (Practical Finance baseline: "
         "4% log equity premium, 18.5% stock volatility, 2% real risk-free rate), not the historical estimates above; "

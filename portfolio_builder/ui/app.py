@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 
 INPUT_FIELDS = ("risk_tolerance", "horizon_years", "initial_investment", "monthly_contribution", "goal",
                 "target_amount", "age", "backtest_years", "rebalance", "hump_glide_path",
-                "annual_income", "retirement_income", "retirement_age")
-CARD_PARTS = ("header", "donut", "table", "wealth")
+                "annual_income", "retirement_income", "retirement_age", "projection_method")
+CARD_PARTS = ("header", "donut", "table", "wealth_caption", "wealth")
 OUTPUT_KEYS = (
     "status", "chips",
     *(f"{part}_{method}" for method in METHODS for part in CARD_PARTS),
@@ -69,6 +69,10 @@ def sidebar_tooltips() -> dict[str, str]:
         "in-monthly": "Ongoing savings added each month ($0 – $50,000).",
         "in-horizon": ("How long you plan to invest (1–30 years). Longer horizons allow more risk: under 3 years "
                        "caps risk at 3, 3–4 years −2, 5–9 years −1, 20+ years +1."),
+        "in-projection": ("Monte Carlo (default): 5,000 random month-by-month return paths; shaded bands show the "
+                          "10th–90th and 25th–75th percentile outcomes and thin lines are sample paths. Simple "
+                          "percentiles: no simulation — steady growth at the expected return and at the 25th/75th "
+                          "percentile returns for your horizon. Goal odds follow the method."),
         "in-lookback": "How many years of history (10–20) to test all three allocations against the S&P 500.",
         "in-rebalance": "How often the backtest resets holdings to their target weights.",
     }
@@ -128,6 +132,7 @@ class Dashboard:
             values_by_key[f"donut_{method}"] = charts.allocation_donut(resp, method)
             values_by_key[f"table_{method}"] = components.holdings_table(resp, method)
             values_by_key[f"wealth_{method}"] = charts.wealth_projection(resp, method, y_max)
+            values_by_key[f"wealth_caption_{method}"] = components.wealth_caption(resp, method)
         values_by_key["insight"] = components.research_insight_card(resp)
         return tuple(values_by_key[key] for key in OUTPUT_KEYS)
 
@@ -140,7 +145,7 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
     with gr.Blocks(title="AI Robo-Advisor Portfolio Builder", fill_width=True) as demo:
         # ---------------- Sidebar: grouped inputs ----------------
         # Help text lives in hover tooltips on each label (see SIDEBAR_TOOLTIPS / interactions.py).
-        with gr.Sidebar(width=400, open=True, label="Inputs"):
+        with gr.Sidebar(width=410, open=True, label="Inputs"):
             gr.Markdown("## 🧭 Build your plan", elem_classes="sb-title")
 
             gr.Markdown("### About you", elem_classes="sb-section")
@@ -181,6 +186,9 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
                                  elem_classes=["money-input", "inline-field"])
             horizon = gr.Slider(label="Investment horizon (yrs)", minimum=1, maximum=30, step=1,
                                 value=defaults["horizon_years"], elem_id="in-horizon", elem_classes="inline-slider")
+            projection = gr.Dropdown(label="Wealth projection", value=defaults["projection_method"],
+                                     choices=[(c["label"], c["value"]) for c in opts["projection_method"]["choices"]],
+                                     elem_id="in-projection", elem_classes="inline-field")
 
             with gr.Accordion("⚙️ Backtest settings", open=False):
                 backtest_years = gr.Slider(label="Lookback (yrs)", minimum=10, maximum=20, step=1,
@@ -221,11 +229,11 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
                                          column_widths=["5%", "14%", "28%", "18%", "16%", "19%"],
                                          elem_classes="holdings-table")
                     gr.Markdown("Projected Wealth", elem_classes="card-subtitle")
-                    gr.Markdown("Expected (mean), optimistic (75th pct) and pessimistic (25th pct) value from "
-                                "5,000 simulations, including monthly contributions. Same scale in all cards.",
-                                elem_classes="section-caption")
+                    wealth_caption = gr.Markdown(components.wealth_caption_text(defaults["projection_method"]),
+                                                 elem_classes="section-caption")
                     wealth = gr.Plot(show_label=False, container=False, elem_classes="wealth-plot")
-                cards[method] = {"header": header, "donut": donut, "table": table, "wealth": wealth}
+                cards[method] = {"header": header, "donut": donut, "table": table, "wealth_caption": wealth_caption,
+                                 "wealth": wealth}
 
         # Where the research-informed model departs from popular rules of thumb, and why.
         with gr.Column(elem_classes="insight-card"):
@@ -250,7 +258,7 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
 
         # ---------------- Events ----------------
         inputs = [risk, horizon, initial, monthly, goal, target, age, backtest_years, rebalance, glide,
-                  income, retire_income, retire_age]
+                  income, retire_income, retire_age, projection]
         components_by_key = {
             "status": status, "chips": chips,
             **{f"{part}_{m}": cards[m][part] for m in METHODS for part in CARD_PARTS},
@@ -262,6 +270,7 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
 
         gr.on(
             triggers=[risk.release, horizon.release, backtest_years.release, rebalance.input, glide.input,
+                      projection.input,
                       initial.blur, initial.submit, monthly.blur, monthly.submit,
                       target.blur, target.submit, age.blur, age.submit, income.blur, income.submit,
                       retire_income.blur, retire_income.submit, retire_age.blur, retire_age.submit],
@@ -286,7 +295,7 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
                     format_money(d["initial_investment"]), format_money(d["monthly_contribution"]), d["goal"],
                     format_money(d["target_amount"]), d["age"], d["backtest_years"], d["rebalance"],
                     d["hump_glide_path"], format_money(d["annual_income"]), format_money(d["retirement_income"]),
-                    d["retirement_age"])
+                    d["retirement_age"], d["projection_method"])
 
         reset.click(reset_values, outputs=[risk_preset, *inputs],
                     show_progress="hidden").then(**run)

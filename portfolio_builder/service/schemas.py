@@ -15,6 +15,9 @@ from .risk import MAX_RISK, MIN_RISK, RISK_LABELS, RiskLevel, resolve_risk_toler
 Method = Literal["rule_based", "mean_variance", "research_informed"]
 METHODS: tuple[str, ...] = ("rule_based", "mean_variance", "research_informed")
 RebalanceFrequency = Literal["monthly", "quarterly", "annual"]
+ProjectionMethod = Literal["monte_carlo", "simple_percentiles"]
+PROJECTION_LABELS: dict[str, str] = {"monte_carlo": "Monte Carlo", "simple_percentiles": "Simple percentiles"}
+PROJECTION_METHODS: tuple[str, ...] = tuple(PROJECTION_LABELS)
 
 
 class FinancialGoal(str, Enum):
@@ -107,6 +110,11 @@ class PortfolioRequest(BaseModel):
         description="Age when retirement income replaces earnings.",
         json_schema_extra={"widget": "number", "step": 1},
     )
+    projection_method: ProjectionMethod = Field(
+        default="monte_carlo", title="Wealth projection",
+        description="Monte Carlo: simulated return paths. Simple percentiles: constant percentile returns (no simulation).",
+        json_schema_extra={"widget": "select"},
+    )
 
     @field_validator("risk_tolerance", mode="before")
     @classmethod
@@ -134,6 +142,17 @@ class PortfolioRequest(BaseModel):
     @classmethod
     def _parse_rebalance(cls, value: Any) -> Any:
         return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator("projection_method", mode="before")
+    @classmethod
+    def _parse_projection_method(cls, value: Any) -> Any:
+        """Accept a value ("simple_percentiles") or its label ("Simple percentiles")."""
+        if not isinstance(value, str):
+            return value
+        text = value.strip().lower().replace("-", " ").replace("_", " ")
+        by_label = {label.lower(): key for key, label in PROJECTION_LABELS.items()}
+        by_key = {key.replace("_", " "): key for key in PROJECTION_LABELS}
+        return by_label.get(text) or by_key.get(text) or value
 
     @field_validator("target_amount", "retirement_income", mode="before")
     @classmethod
@@ -193,6 +212,8 @@ def get_form_options() -> dict[str, dict[str, Any]]:
             entry["default_rate"] = DEFAULT_REPLACEMENT_RATE
         elif name == "rebalance":
             entry["choices"] = [{"value": v, "label": v.capitalize()} for v in ("monthly", "quarterly", "annual")]
+        elif name == "projection_method":
+            entry["choices"] = [{"value": key, "label": label} for key, label in PROJECTION_LABELS.items()]
         options[name] = entry
     return options
 
@@ -215,6 +236,7 @@ class ProfileSummary(BaseModel):
     retirement_age: int = 67
     human_capital: float | None = None
     research_equity_target: float | None = None
+    projection_method: str = PROJECTION_LABELS["monte_carlo"]
 
 
 class MarketDataSummary(BaseModel):
@@ -266,6 +288,7 @@ class ProjectionPoint(BaseModel):
 
 
 class Projection(BaseModel):
+    method: ProjectionMethod = "monte_carlo"
     points: list[ProjectionPoint]
     final_expected: float
     final_p10: float
@@ -276,8 +299,9 @@ class Projection(BaseModel):
     total_contributed: float
     target_amount: float | None = None
     probability_of_meeting_target: float | None = None
-    simulations: int
+    simulations: int  # 0 for simple percentiles
     seed: int | None
+    sample_paths: list[list[float]] = Field(default_factory=list)  # year-end values of a few simulated paths
 
 
 class PortfolioRecommendation(BaseModel):

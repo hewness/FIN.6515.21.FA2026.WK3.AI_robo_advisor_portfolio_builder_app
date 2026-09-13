@@ -44,6 +44,7 @@ Then open http://127.0.0.1:7860.
 | Investment plan | Initial investment | Money text | $1,000–$10,000,000 | $50,000 |
 | | Monthly contribution | Money text | $0–$50,000 | $1,000 |
 | | Investment horizon (yrs) | Slider | 1–30 years | 25 |
+| | Wealth projection | Dropdown | Monte Carlo / Simple percentiles | Monte Carlo |
 | Backtest settings | Lookback (yrs) | Slider | 10–20 years | 10 |
 | | Rebalancing | Dropdown | Monthly / Quarterly / Annual | Quarterly |
 
@@ -54,7 +55,9 @@ Invalid inputs are listed in a red status box in the sidebar, and the charts kee
   - A one-line **equity basis**: how that card's stock share was set (glide path, equity band, or the practical finance formula with its numbers). When the research formula asks for more than 100% stocks (large human capital relative to savings), the line turns amber ("⚠ Capped at 100% stocks · formula gives 520%") and the card's description explains that risk, age and horizon changes won't move the mix until savings grow.
   - Tiles (three over two) for expected annual return, volatility, Sharpe ratio, maximum historical drawdown (from the backtest), and probability of reaching the goal (share of 5,000 simulated outcomes at or above the target).
   - An allocation-by-asset-class donut above the holdings table. The table reserves room for every holding (up to 6 funds plus cash), so it never scrolls, and each section lines up across the three cards. Each holding row starts with a color swatch that matches its asset class's slice, and shows the fund's annualized expected return (Exp. ret., the same estimate the optimizer uses; weights times these returns give the portfolio's expected return), its weight and its dollar amount. Hovering over (or tapping) a slice highlights that asset class's holdings and dims the rest.
-  - Projected wealth: expected (mean), optimistic (75th percentile) and pessimistic (25th percentile) paths, including contributions, with the goal target line. All cards use the same scale.
+  - Projected wealth, including contributions, with the goal target line; all cards use the same scale. The **Wealth projection** dropdown picks the method, and the chart, caption, goal odds, profile chip and notes follow it:
+    - **Monte Carlo** (default): a fan chart from 5,000 simulated month-by-month paths — shaded 10th–90th and 25th–75th percentile bands, the median, the expected (mean) path and 30 thin sample paths spanning worst to best. Goal odds are the share of paths that reach the target.
+    - **Simple percentiles**: no simulation — expected, optimistic (75th percentile) and pessimistic (25th percentile) lines, each growing at a constant return from the return distribution. Goal odds are the chance the horizon's annualized return beats the constant return needed to reach the target.
 - **Research vs. Popular Wisdom:** bars comparing the stock share of the three portfolios with two popular rules of thumb (100 − age, and a typical target-date fund), next to a short explanation of where the research-informed model disagrees with popular advice and why, citing the papers. See [Research-informed model](#research-informed-model).
 - **Rule-based vs Mean-variance vs Research-informed:** a comparison container with two charts side by side that each plot all three portfolios.
   - **Risk vs. Return:** asset classes (each an equal-weight blend of its funds), cash, the efficient frontier, the max-Sharpe point and a star for each portfolio.
@@ -227,6 +230,7 @@ Unconstrained mean-variance results depend heavily on the historical sample. Sin
 | `annual_income` | $0–$5,000,000 (default $85,000) | Research-informed human capital (ignored once age ≥ retirement age) |
 | `retirement_income` | $0–$1,000,000 per year, or blank for 40% of income | Research-informed human capital in retirement |
 | `retirement_age` | 50–75 (default 67) | When retirement income replaces earnings |
+| `projection_method` | `monte_carlo` (default) / `simple_percentiles`, or their labels | How projections and goal odds are computed |
 
 ```python
 from portfolio_builder.service import InputValidationError, get_form_options, recommend_portfolio
@@ -251,12 +255,18 @@ response.frontier_frame()             #   also asset_class_frame, projection_fra
 response.to_dict()                    # JSON-safe dict
 ```
 
-Projections show value at each year end, with each month's contribution added after that month's growth. They include an expected path plus 10th, 25th, 50th, 75th and 90th percentiles from 5,000 lognormal simulations with a fixed seed, so repeated runs give the same result. The response also includes `probability_of_meeting_target` against `target_amount` (default set by goal), a 10–20 year `backtest` against the S&P 500 (`backtest_years`, `rebalance`), asset-class risk/return points, and non-blocking `warnings`. The service loads the engine once per process and is safe to call from concurrent requests.
+Projections show value at each year end, with each month's contribution added after that month's growth. Annual returns are lognormal with arithmetic mean = expected return and standard deviation = volatility, and every projection has the same expected (mean) path. `projection_method` picks how the 10th, 25th, 50th, 75th and 90th percentiles and `probability_of_meeting_target` are computed:
+
+- `monte_carlo` (default): 5,000 simulated month-by-month paths with a fixed seed, so repeated runs give the same result. Percentiles and goal odds come from the simulated balances, and `sample_paths` holds 30 paths at evenly spaced ranks of final value for charting.
+- `simple_percentiles`: closed form, no simulation. The percentile-p return for a t-year horizon is `exp(mu_log + z_p·sigma_log/√t) − 1`, and each percentile line grows the initial investment and contributions at that constant return. Goal odds solve for the constant return r* that reaches the target and report `P(annualized return ≥ r*)` from the same distribution, so a target equal to the final median gives exactly 50%.
+
+The response also includes `probability_of_meeting_target` against `target_amount` (default set by goal), a 10–20 year `backtest` against the S&P 500 (`backtest_years`, `rebalance`), asset-class risk/return points, and non-blocking `warnings`. The service loads the engine once per process and is safe to call from concurrent requests.
 
 ```bash
 python -m portfolio_builder.service --age 45 --risk moderate --horizon 20 --initial 100000 --monthly 1000 --goal retirement
 python -m portfolio_builder.service --age 30 --risk aggressive --horizon 2 --goal home_purchase --json
 python -m portfolio_builder.service --age 68 --risk moderate --horizon 20 --initial 500000 --income 0 --retirement-income 30000
+python -m portfolio_builder.service --projection simple_percentiles
 ```
 
 ## Tests

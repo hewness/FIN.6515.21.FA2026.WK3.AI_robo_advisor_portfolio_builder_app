@@ -298,3 +298,24 @@ def test_holdings_expected_returns_add_up_to_portfolio(response, method, portfol
         expected = inputs.risk_free_rate if h.ticker == "CASH" else inputs.expected_returns[h.ticker]
         assert h.expected_return == pytest.approx(expected)
     assert sum(h.weight * h.expected_return for h in rec.holdings) == pytest.approx(rec.expected_return)
+
+
+def test_projection_method_defaults_to_monte_carlo(response):
+    for method in ("rule_based", "mean_variance", "research_informed"):
+        proj = response.recommendation(method).projection
+        assert proj.method == "monte_carlo" and len(proj.sample_paths) == 30 and proj.simulations > 0
+    assert response.profile.projection_method == "Monte Carlo"
+    assert "Monte Carlo simulations" in response.notes[-1]
+
+
+def test_simple_percentiles_projection(portfolio_service, response):
+    simple = portfolio_service.build_portfolio({**REQUEST, "projection_method": "Simple percentiles"})
+    assert simple.profile.projection_method == "Simple percentiles"
+    for method in ("rule_based", "mean_variance", "research_informed"):
+        proj, mc = simple.recommendation(method).projection, response.recommendation(method).projection
+        assert proj.method == "simple_percentiles" and proj.sample_paths == [] and proj.simulations == 0
+        assert proj.final_expected == mc.final_expected  # same mean path, different percentile method
+        assert proj.final_p50 != mc.final_p50 and 0 <= proj.probability_of_meeting_target <= 1
+        # portfolios themselves don't change with the projection method
+        assert simple.recommendation(method).holdings == response.recommendation(method).holdings
+    assert "simple percentiles" in simple.notes[-1]
