@@ -55,10 +55,10 @@ Invalid inputs are listed in a red status box in the sidebar, and the charts kee
   - Tiles (three over two) for expected annual return, volatility, Sharpe ratio, maximum historical drawdown (from the backtest), and probability of reaching the goal (share of 5,000 simulated outcomes at or above the target).
   - An allocation-by-asset-class donut above the holdings table. The table reserves room for every holding (up to 6 funds plus cash), so it never scrolls, and each section lines up across the three cards. Each holding row starts with a color swatch that matches its asset class's slice. Hovering over (or tapping) a slice highlights that asset class's holdings and dims the rest.
   - Projected wealth: expected (mean), optimistic (75th percentile) and pessimistic (25th percentile) paths, including contributions, with the goal target line. All cards use the same scale.
-- **Research vs. Popular Wisdom:** bars comparing the stock share of the three portfolios with two popular rules of thumb (100 − age, and a typical target-date fund), next to a short explanation of where the research-informed model disagrees with popular advice and why, citing the papers. See [Research-informed model](#research-informed-model).
 - **Rule-based vs Mean-variance vs Research-informed:** a comparison container with two charts side by side that each plot all three portfolios.
   - **Risk vs. Return:** asset classes (each an equal-weight blend of its funds), cash, the efficient frontier, the max-Sharpe point and a star for each portfolio.
   - **Historical Backtest vs. S&P 500 (SPY):** growth of the initial investment and drawdowns over 10–20 years.
+- **Research vs. Popular Wisdom:** bars comparing the stock share of the three portfolios with two popular rules of thumb (100 − age, and a typical target-date fund), next to a short explanation of where the research-informed model disagrees with popular advice and why, citing the papers. See [Research-informed model](#research-informed-model).
 - **Notes & assumptions**, including the full name of each fund.
 
 **Colors:**
