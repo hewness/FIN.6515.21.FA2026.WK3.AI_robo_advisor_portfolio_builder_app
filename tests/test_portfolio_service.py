@@ -145,7 +145,7 @@ def test_backtest_in_response(response):
     bt = response.backtest
     assert set(bt.metrics) == {"rule_based", "mean_variance", "benchmark"}
     assert bt.metrics["benchmark"].label == "S&P 500 (SPY)" and bt.benchmark == "SPY"
-    assert bt.initial_value == 250_000 and bt.rebalance == "quarterly" and bt.years_requested == 15
+    assert bt.initial_value == 250_000 and bt.rebalance == "quarterly" and bt.years_requested == 10
     assert bt.points[0].rule_based == 250_000 and bt.points[-1].date == bt.end
     assert any("years of history" in n for n in bt.notes)  # test data covers ~5 years
     assert response.rule_based.max_drawdown == bt.metrics["rule_based"].max_drawdown

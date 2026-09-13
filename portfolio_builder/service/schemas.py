@@ -76,7 +76,7 @@ class PortfolioRequest(BaseModel):
         json_schema_extra={"widget": "number", "step": 10_000},
     )
     backtest_years: int = Field(
-        default=15, ge=10, le=20, title="Backtest lookback (years)",
+        default=10, ge=10, le=20, title="Backtest lookback (years)",
         description="How far back to test the allocation against the S&P 500.",
         json_schema_extra={"widget": "slider", "step": 1},
     )

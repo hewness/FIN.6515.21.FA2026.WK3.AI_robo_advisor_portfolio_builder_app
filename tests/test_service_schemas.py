@@ -19,7 +19,7 @@ def test_defaults_are_valid():
     assert req.risk_score == 5.5 and req.goal is FinancialGoal.RETIREMENT
     assert (req.horizon_years, req.initial_investment, req.monthly_contribution, req.age) == (25, 50_000, 1_000, 40)
     assert req.target_amount is None and req.resolved_target == 1_500_000
-    assert (req.backtest_years, req.rebalance) == (15, "quarterly")
+    assert (req.backtest_years, req.rebalance) == (10, "quarterly")
 
 
 @pytest.mark.parametrize("goal,target", [("retirement", 1_500_000), ("home_purchase", 150_000),

@@ -40,7 +40,7 @@ Then open http://127.0.0.1:7860.
 | Investment plan | Initial investment | Money text | $1,000–$10,000,000 | $50,000 |
 | | Monthly contribution | Money text | $0–$50,000 | $1,000 |
 | | Investment horizon | Slider | 1–30 years | 25 |
-| Backtest settings | Lookback | Slider | 10–20 years | 15 |
+| Backtest settings | Lookback | Slider | 10–20 years | 10 |
 | | Rebalancing | Radio | Monthly / Quarterly / Annual | Quarterly |
 
 Invalid inputs are listed in a red status box in the sidebar, and the charts keep the last valid results. Input combinations worth a second look (an unreachable target, a horizon beyond age 75, a very long home or education horizon, a capped short horizon) show an amber warning.

@@ -407,7 +407,7 @@ def recommend_portfolio(
     goal: str,
     age: int,
     target_amount: float | None = None,
-    backtest_years: int = 15,
+    backtest_years: int = 10,
     rebalance: str = "quarterly",
 ) -> PortfolioResponse:
     """Build both portfolios from UI form values (arguments in form order, e.g. Gradio inputs)."""

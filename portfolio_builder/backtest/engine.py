@@ -25,7 +25,7 @@ class BacktestError(Exception):
 
 @dataclass(frozen=True)
 class BacktestConfig:
-    years: int = 15
+    years: int = 10
     rebalance: Rebalance = "quarterly"
     benchmark: str = "SPY"
     risk_free_rate: float = 0.04
