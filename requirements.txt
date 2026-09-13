@@ -4,4 +4,4 @@ pandas==3.0.5
 pyarrow==25.0.1
 numpy==2.5.3
 scipy==1.18.1
-pydantic==2.13.5
+pydantic>=2.11.10,<3  # gradio[mcp] on HF Spaces caps pydantic at 2.12.5
