@@ -142,6 +142,8 @@ CSS = """
                    -webkit-line-clamp: 2; }  /* exactly two lines in both cards keeps sections aligned */
 .card-head .basis { font-size: .8rem; font-weight: 600; line-height: 1.35; margin-top: .15rem; white-space: nowrap;
                     overflow: hidden; text-overflow: ellipsis; color: var(--card-accent); }
+/* Amber like the sidebar's "Worth a second look" warnings: the research formula hit the 100% stock cap. */
+.card-head .basis.capped { color: #D97706; }
 .tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; }
 /* Cards sit three across, so tiles go three over two, each row filling the card width. */
 .portfolio-card .tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }

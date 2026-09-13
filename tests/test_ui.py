@@ -94,13 +94,20 @@ def test_components(response):
                           ("mean_variance", "Mean-variance Optimized Portfolio"),
                           ("research_informed", "Research-informed Portfolio")):
         html = components.summary_header(response, method)
-        assert title in html and "class='basis'" in html
+        assert title in html and "class='basis" in html
         for label in ("Exp. return", "Volatility", "Sharpe", "Max drawdown", "Goal odds"):
             assert html.count(label) == 1
 
     chips = components.profile_chips(response)
     assert "Age <b>40</b>" in chips and "$1,500,000" in chips and "Human capital" in chips
     assert "human capital" in components.equity_basis(response, "research_informed")[1]
+    # defaults (age 40, $50k saved, $85k income) push the formula past 100% stocks: the card says so
+    assert response.research_informed.details["unclipped_equity_pct"] > 1
+    research = components.summary_header(response, "research_informed")
+    assert "basis capped" in research and "Capped at 100% stocks" in research
+    assert "won&#x27;t move it" in research
+    assert components.equity_cap_note(response, "rule_based") is None
+    assert "Capped" not in components.summary_header(response, "mean_variance")
 
     table = components.holdings_table(response, "rule_based")
     assert list(table.columns) == [" ", "Ticker", "Asset class", "Exp. ret.", "Weight", "Amount"]
@@ -289,3 +296,13 @@ def test_risk_tolerance_is_inline_dropdown(portfolio_service):
     assert isinstance(preset, gr.Dropdown)
     assert [c[0] for c in preset.choices] == ["Conservative", "Moderate", "Aggressive", "Custom"]
     assert preset.value == "Moderate"
+
+
+def test_uncapped_research_card_has_no_cap_note(portfolio_service):
+    retiree = {**default_values(), "age": 68, "initial_investment": 500_000, "annual_income": 0,
+               "retirement_income": 30_000}
+    resp = portfolio_service.build_portfolio(retiree)
+    assert resp.research_informed.details["unclipped_equity_pct"] < 1
+    html = components.summary_header(resp, "research_informed")
+    assert components.equity_cap_note(resp, "research_informed") is None
+    assert "Capped" not in html and "class='basis'" in html and resp.research_informed.description[:20] in html

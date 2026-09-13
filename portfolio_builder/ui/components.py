@@ -62,10 +62,15 @@ def _card(resp: PortfolioResponse, method: str) -> str:
     ]
     color = METHOD_COLORS[method]
     basis, basis_tip = equity_basis(resp, method)
+    description, basis_css = rec.description, "basis"
+    cap_note = equity_cap_note(resp, method)
+    if cap_note:  # replaces the model description (still in the tooltip), so the card keeps its shape
+        description, basis_css = cap_note, "basis capped"
     return (
         f"<div class='card-head'><span class='name' style='color:{color}'>{escape(rec.title)}</span>"
-        f"<span class='desc' title='{escape(rec.description)}'>{escape(rec.description)}</span>"
-        f"<span class='basis' title='{escape(basis_tip)}'>{escape(basis)}</span></div>"
+        f"<span class='desc' title='{escape(description + ' ' + rec.description if cap_note else description)}'>"
+        f"{escape(description)}</span>"
+        f"<span class='{basis_css}' title='{escape(basis_tip)}'>{escape(basis)}</span></div>"
         f"<div class='tiles'>{''.join(tiles)}</div>"
     )
 
@@ -79,10 +84,13 @@ def equity_basis(resp: PortfolioResponse, method: str) -> tuple[str, str]:
     d = rec.details
     if method == "research_informed":
         h, w = money(d["human_capital"]), money(d["financial_wealth"])
-        capped = ", capped at 100%" if d.get("unclipped_equity_pct", 0) > 1 else ""
+        formula = f"Merton share {d['merton_share']:.0%} × (1 + {h} human capital ÷ {w} savings)"
+        if equity_cap_note(resp, method):
+            return (f"⚠ Capped at 100% stocks · formula gives {d['unclipped_equity_pct']:.0%}",
+                    f"{formula} = {d['unclipped_equity_pct']:.0%}, capped at 100% (no borrowing to buy stocks). "
+                    "The mix responds to risk, age and horizon again once savings grow relative to future income.")
         return (f"Equity {d['merton_share']:.0%} × (1 + {h} ÷ {w}) → {d['equity_pct']:.0%}",
-                f"Merton share {d['merton_share']:.0%} × (1 + {h} human capital ÷ {w} savings) = "
-                f"{d['equity_pct']:.0%} equity{capped}")
+                f"{formula} = {d['equity_pct']:.0%} equity")
     if method == "rule_based":
         glide = resp.profile.glide_path
         short = "hump glide path" if glide.lower().startswith("hump") else "110 − age rule"
@@ -95,6 +103,17 @@ def equity_basis(resp: PortfolioResponse, method: str) -> tuple[str, str]:
                 f"Equity funds held within ±5 points of the glide path's {d.get('equity_target', equity):.0%}")
     equity = equity_share(rec)
     return f"Equity {equity:.0%} · set by the frontier", "Equity share wherever the efficient frontier puts it (no age input)"
+
+
+def equity_cap_note(resp: PortfolioResponse, method: str) -> str | None:
+    """When the research formula asks for more than 100% stocks, explain why the mix stops responding."""
+    if method != "research_informed":
+        return None
+    d = resp.recommendation(method).details
+    if d.get("unclipped_equity_pct", 0) <= 1:
+        return None
+    return (f"Human capital ({money(d['human_capital'])}) dwarfs savings ({money(d['financial_wealth'])}): risk, "
+            "age or horizon changes won't move it.")
 
 
 def summary_header(resp: PortfolioResponse, method: str) -> str:
