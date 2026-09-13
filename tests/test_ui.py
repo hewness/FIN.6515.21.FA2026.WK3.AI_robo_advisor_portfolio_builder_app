@@ -1,11 +1,23 @@
+import json
+
 import gradio as gr
 import pandas as pd
 import plotly.graph_objects as go
 import pytest
 
 from portfolio_builder.ui import Dashboard, build_demo, charts, components
-from portfolio_builder.ui.app import INPUT_FIELDS, OUTPUT_KEYS, default_values, preset_for
-from portfolio_builder.ui.interactions import HEAD
+from portfolio_builder.ui.app import (
+    HEAD,
+    HOLDINGS_TABLE_HEIGHT,
+    INPUT_FIELDS,
+    MAX_HOLDINGS,
+    MONEY_FIELDS,
+    OUTPUT_KEYS,
+    default_values,
+    preset_for,
+    sidebar_tooltips,
+)
+from portfolio_builder.ui.formatting import format_money, parse_money
 from portfolio_builder.ui.theme import ASSET_CLASS_COLORS, METHOD_COLORS
 
 
@@ -122,7 +134,17 @@ def test_dashboard_update_valid_and_invalid(portfolio_service):
         assert isinstance(out[f"wealth_{method}"], go.Figure)
     assert all(isinstance(out[k], go.Figure) for k in ("scatter", "backtest"))
 
-    bad = {**values, "age": 95, "initial_investment": 5}
+    as_text = {**values, **{f: format_money(values[f]) for f in MONEY_FIELDS}}
+    assert as_text["initial_investment"] == "$50,000"
+    text_out = dict(zip(OUTPUT_KEYS, dashboard.update(*[as_text[f] for f in INPUT_FIELDS])))
+    assert "status ok" in text_out["status"]
+    assert "$50K" in text_out["donut_rule_based"].data[0].title.text  # "$50,000" text parsed as 50,000
+
+    typo = {**as_text, "initial_investment": "fifty thousand"}
+    out = dashboard.update(*[typo[f] for f in INPUT_FIELDS])
+    assert "Initial investment ($) must be a number between 1,000 and 10,000,000" in out[0]
+
+    bad = {**values, "age": 95, "initial_investment": "$5"}
     out = dashboard.update(*[bad[f] for f in INPUT_FIELDS])
     assert len(out) == len(OUTPUT_KEYS)
     assert "Please fix 2 inputs" in out[0]
@@ -138,3 +160,48 @@ def test_hover_script_targets_card_donut_and_table():
     for needle in (".portfolio-card", ".donut-plot", "plotly_hover", "plotly_unhover", ".virtual-row",
                    "Asset class", "row-active", "row-dim"):
         assert needle in HEAD
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("$50,000", 50_000.0), ("50000", 50_000.0), (" $1,234,567 ", 1_234_567.0), ("50k", 50_000.0),
+    ("2.5K", 2_500.0), ("1.2m", 1_200_000.0), ("$0", 0.0), (1500, 1_500.0), (99.5, 99.5),
+    ("", None), (None, None), ("   ", None), ("fifty", "fifty"), ("$5-", "$5-"), ("1e6", "1e6"),
+])
+def test_parse_money(text, expected):
+    assert parse_money(text) == expected
+
+
+@pytest.mark.parametrize("value,expected", [
+    (50_000, "$50,000"), ("1234567", "$1,234,567"), ("50k", "$50,000"), ("$1,000", "$1,000"),
+    (0, "$0"), (999.6, "$1,000"), ("", ""), (None, ""), ("abc", "abc"),
+])
+def test_format_money(value, expected):
+    assert format_money(value) == expected
+
+
+def test_money_inputs_are_formatted_textboxes(portfolio_service):
+    demo = build_demo(portfolio_service)
+    boxes = {b.elem_id: b for b in demo.blocks.values() if getattr(b, "elem_id", None) in ("in-initial", "in-monthly", "in-target")}
+    assert set(boxes) == {"in-initial", "in-monthly", "in-target"}
+    assert all(isinstance(b, gr.Textbox) and "money-input" in (b.elem_classes or []) for b in boxes.values())
+    assert boxes["in-initial"].value == "$50,000" and boxes["in-monthly"].value == "$1,000"
+    assert boxes["in-target"].value == "$1,500,000"
+
+
+def test_sidebar_help_moves_to_label_tooltips(portfolio_service):
+    demo = build_demo(portfolio_service)
+    sidebar_ids = {b.elem_id for b in demo.blocks.values() if str(getattr(b, "elem_id", "") or "").startswith("in-")}
+    tips = sidebar_tooltips()
+    assert sidebar_ids == set(tips)
+    assert all(not getattr(b, "info", None) for b in demo.blocks.values() if getattr(b, "elem_id", None) in tips)
+    assert json.dumps(tips["in-initial"]) in HEAD
+    for needle in ("has-tip", "block-info", "money-input", "toLocaleString"):
+        assert needle in HEAD
+
+
+def test_holdings_table_fits_largest_portfolio_without_scrolling(portfolio_service):
+    assert MAX_HOLDINGS == 12  # 11 funds + cash
+    assert HOLDINGS_TABLE_HEIGHT >= 45 + 36 * MAX_HOLDINGS
+    demo = build_demo(portfolio_service)
+    tables = [b for b in demo.blocks.values() if isinstance(b, gr.Dataframe)]
+    assert len(tables) == 2 and all(t.max_height == HOLDINGS_TABLE_HEIGHT for t in tables)

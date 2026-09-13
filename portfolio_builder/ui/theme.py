@@ -111,7 +111,8 @@ CSS = """
 .comparison-card .section-caption { min-height: 2.9rem; }
 .card-head { display: flex; flex-direction: column; gap: .1rem; margin-bottom: .6rem; }
 .card-head .name { font-weight: 700; font-size: 1.12rem; line-height: 1.3; }
-.card-head .desc { color: var(--body-text-color-subdued); font-size: .8rem; }
+.card-head .desc { color: var(--body-text-color-subdued); font-size: .8rem; line-height: 1.35;
+                   min-height: calc(2 * 1.35em); }  /* same height in both cards keeps sections aligned */
 .tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; }
 @media (max-width: 1100px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -132,4 +133,22 @@ CSS = """
 .chart-card { background: var(--block-background-fill); border: 1px solid var(--border-color-primary) !important;
               border-radius: 14px !important; padding: .4rem .7rem .2rem !important; }
 footer { display: none !important; }
+
+/* Sidebar: help text appears as a tooltip above an input's label on hover (so it never covers the input). */
+[id^="in-"], .form:has(> [id^="in-"]), .form:has([id^="in-"]) { overflow: visible !important; }
+[id^="in-"]:hover, .form:has([id^="in-"]:hover) { z-index: 60 !important; position: relative; }
+.has-tip { cursor: help; position: relative; }
+.has-tip::after { content: "i"; display: inline-flex; align-items: center; justify-content: center;
+                  width: .95rem; height: .95rem; margin-left: .35rem; border-radius: 50%; font-size: .62rem;
+                  font-weight: 700; font-style: italic; font-family: Georgia, serif; vertical-align: .08em;
+                  color: var(--body-text-color-subdued); border: 1px solid currentColor; opacity: .65; }
+.has-tip::before { content: attr(data-tip); position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 1000;
+                   width: max-content; max-width: 290px; white-space: normal; text-align: left;
+                   padding: .55rem .7rem; border-radius: 10px; background: #1E293B; color: #F1F5F9;
+                   border: 1px solid rgba(148, 163, 184, .25); box-shadow: 0 10px 28px rgba(15, 23, 42, .28);
+                   font-size: .78rem; font-weight: 450; line-height: 1.45; letter-spacing: normal; text-transform: none;
+                   opacity: 0; transform: translateY(3px); pointer-events: none; transition: opacity .14s, transform .14s; }
+.has-tip:hover::before { opacity: 1; transform: translateY(0); }
+.has-tip:hover::after { opacity: 1; }
+.money-input input { font-variant-numeric: tabular-nums; }
 """

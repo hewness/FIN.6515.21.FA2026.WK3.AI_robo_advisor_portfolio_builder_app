@@ -29,16 +29,16 @@ Then open http://127.0.0.1:7860.
 
 `app.py` launches a Gradio dashboard (`portfolio_builder/ui`) that compares the rule-based and mean-variance portfolios side by side.
 
-**Sidebar inputs** (defaults in brackets). The dashboard updates when you release a slider, change a choice, or leave a number field.
+**Sidebar inputs** (defaults in brackets). The dashboard updates when you release a slider, change a choice, or leave a text field. Money fields format as you type (`$#,000`) and accept shorthand such as `50k` or `1.2m`. Hover over a label's ⓘ to see what the input does and its allowed range.
 
 | Group | Input | Control | Range / options | Default |
 |---|---|---|---|---|
 | About you | Age | Number | 18–80 | 40 |
 | | Financial goal | Dropdown | Retirement / Home purchase / Education / General wealth | Retirement |
-| | Goal target ($) | Number | $1,000–$100M; resets to the goal's default when the goal changes | $1.5M (home $150k, education $200k, general $1M) |
+| | Goal target | Money text | $1,000–$100M; resets to the goal's default when the goal changes | $1.5M (home $150k, education $200k, general $1M) |
 | Risk profile | Risk tolerance | Preset (Conservative / Moderate / Aggressive / Custom) + 1–10 slider | presets = 3 / 5.5 / 8 | Moderate (5.5) |
-| Investment plan | Initial investment ($) | Number | $1,000–$10,000,000 | $50,000 |
-| | Monthly contribution ($) | Number | $0–$50,000 | $1,000 |
+| Investment plan | Initial investment | Money text | $1,000–$10,000,000 | $50,000 |
+| | Monthly contribution | Money text | $0–$50,000 | $1,000 |
 | | Investment horizon | Slider | 1–30 years | 25 |
 | Backtest settings | Lookback | Slider | 10–20 years | 15 |
 | | Rebalancing | Radio | Monthly / Quarterly / Annual | Quarterly |
@@ -48,7 +48,7 @@ Invalid inputs are listed in a red status box in the sidebar, and the charts kee
 **Main panel**
 - **A card for each portfolio** (Rule-based Lifecycle Portfolio in indigo, Mean-variance Optimized Portfolio in teal), side by side:
   - Tiles for expected annual return, volatility, Sharpe ratio, maximum historical drawdown (from the backtest), and probability of reaching the goal (share of 5,000 simulated outcomes at or above the target).
-  - An allocation-by-asset-class donut next to the holdings table. Each holding row starts with a color swatch that matches its asset class's slice. Hovering over (or tapping) a slice highlights that asset class's holdings and dims the rest.
+  - An allocation-by-asset-class donut next to the holdings table. The table is tall enough for every holding (up to 11 funds plus cash), so it never scrolls, and each section lines up across the two cards. Each holding row starts with a color swatch that matches its asset class's slice. Hovering over (or tapping) a slice highlights that asset class's holdings and dims the rest.
   - Projected wealth: expected (mean), optimistic (75th percentile) and pessimistic (25th percentile) paths, including contributions, with the goal target line. Both cards use the same scale.
 - **Rule-based Lifecycle Portfolio vs Mean-variance Optimized Portfolio:** a comparison container with two charts side by side that each plot both portfolios.
   - **Risk vs. Return:** asset classes (each an equal-weight blend of its funds), cash, the efficient frontier, the max-Sharpe point and both portfolios.
