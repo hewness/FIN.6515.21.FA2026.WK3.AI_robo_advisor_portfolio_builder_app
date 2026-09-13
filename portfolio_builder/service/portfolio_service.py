@@ -49,11 +49,11 @@ from .schemas import (
 
 METHOD_TEXT = {
     "rule_based": (
-        "Rule-based lifecycle portfolio",
+        "Rule-based Lifecycle Portfolio",
         "Equity share = 110 - age, adjusted for risk tolerance; split across asset classes by fixed sleeves.",
     ),
     "mean_variance": (
-        "Mean-variance optimized portfolio",
+        "Mean-variance Optimized Portfolio",
         "Highest expected return on the efficient frontier for a volatility target set by risk tolerance.",
     ),
 }

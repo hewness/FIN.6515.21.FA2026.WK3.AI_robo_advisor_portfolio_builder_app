@@ -46,13 +46,18 @@ Then open http://127.0.0.1:7860.
 Invalid inputs are listed in a red status box in the sidebar, and the charts keep the last valid results. Input combinations worth a second look (an unreachable target, a horizon beyond age 75, a very long home or education horizon, a capped short horizon) show an amber warning.
 
 **Main panel**
-- **A summary card for each portfolio**, side by side:
+- **A card for each portfolio** (Rule-based Lifecycle Portfolio in indigo, Mean-variance Optimized Portfolio in teal), side by side:
   - Tiles for expected annual return, volatility, Sharpe ratio, maximum historical drawdown (from the backtest), and probability of reaching the goal (share of 5,000 simulated outcomes at or above the target).
-  - Below the tiles, an allocation-by-asset-class donut (the same colors in both cards) next to the holdings table (ticker, asset class, weight, dollar amount).
-- **Risk vs. return:** asset classes (each an equal-weight blend of its funds), cash, the efficient frontier, the max-Sharpe portfolio and both recommended portfolios.
-- **Projected wealth:** expected (mean), optimistic (75th percentile) and pessimistic (25th percentile) paths, including the initial investment and monthly contributions, with the goal target line.
-- **Historical backtest vs. S&P 500 (SPY):** growth of the initial investment and drawdowns over 10–20 years.
+  - An allocation-by-asset-class donut next to the holdings table. Each holding row starts with a color swatch that matches its asset class's slice. Hovering over (or tapping) a slice highlights that asset class's holdings and dims the rest.
+  - Projected wealth: expected (mean), optimistic (75th percentile) and pessimistic (25th percentile) paths, including contributions, with the goal target line. Both cards use the same scale.
+- **Rule-based Lifecycle Portfolio vs Mean-variance Optimized Portfolio:** a comparison container with two charts side by side that each plot both portfolios.
+  - **Risk vs. Return:** asset classes (each an equal-weight blend of its funds), cash, the efficient frontier, the max-Sharpe point and both portfolios.
+  - **Historical Backtest vs. S&P 500 (SPY):** growth of the initial investment and drawdowns over 10–20 years.
 - **Notes & assumptions**, including the full name of each fund.
+
+**Colors:**
+- Indigo, teal and slate always mean the rule-based portfolio, the mean-variance portfolio and the S&P 500 benchmark, in every widget.
+- Asset classes use their own palette so they never look like a portfolio: warm tones for stocks, greens for bonds, warm gray for cash.
 
 **Backtest method** (`portfolio_builder/backtest`):
 - Daily total returns with fixed target weights. Holdings drift and reset at each rebalance date. Cash earns the risk-free rate.

@@ -9,10 +9,11 @@ import pandas as pd
 from ..service import PortfolioResponse
 from ..service.schemas import PortfolioRecommendation
 from .charts import _money_short
-from .theme import ASSET_CLASS_SHORT, METHOD_COLORS, METHOD_LABELS
+from .theme import ASSET_CLASS_COLORS, ASSET_CLASS_SHORT, METHOD_COLORS, METHOD_LABELS, METHOD_TITLES
 
 METHODS = ("rule_based", "mean_variance")
-HOLDINGS_COLUMNS = ["Ticker", "Asset class", "Weight", "Amount"]
+HOLDINGS_COLUMNS = [" ", "Ticker", "Asset class", "Weight", "Amount"]
+HOLDINGS_DATATYPES = ["html", "str", "str", "str", "str"]
 
 
 def _tile(label: str, value: str, sub: str = "", tooltip: str = "", css: str = "") -> str:
@@ -96,23 +97,43 @@ def status_panel(errors: dict[str, str] | None = None, warnings: list[str] | Non
     return "<div class='status ok'><span class='title'>✅ Inputs look good</span> · dashboard is up to date</div>"
 
 
+def asset_dot(asset_class: str) -> str:
+    """Color swatch matching the asset class's slice in the allocation donut."""
+    color = ASSET_CLASS_COLORS.get(asset_class, "#CBD5E1")
+    return f"<span class='asset-dot' style='background-color:{color}' title='{escape(asset_class)}'></span>"
+
+
 def holdings_table(resp: PortfolioResponse, method: str) -> pd.DataFrame:
     rec = resp.recommendation(method)
     return pd.DataFrame(
-        [{"Ticker": h.ticker, "Asset class": ASSET_CLASS_SHORT.get(h.asset_class, h.asset_class),
+        [{" ": asset_dot(h.asset_class), "Ticker": h.ticker,
+          "Asset class": ASSET_CLASS_SHORT.get(h.asset_class, h.asset_class),
           "Weight": f"{h.weight:.1%}", "Amount": f"${h.amount:,.0f}"}
          for h in rec.holdings],
         columns=HOLDINGS_COLUMNS,
     )
 
 
+def comparison_header() -> str:
+    """Title for the container whose charts plot both portfolios together."""
+    rb, mv, bench = (METHOD_COLORS[k] for k in ("rule_based", "mean_variance", "benchmark"))
+    return (
+        "<div class='comparison-head'>"
+        f"<div class='title'><span style='color:{rb}'>{METHOD_TITLES['rule_based']}</span>"
+        f"<span class='vs'>vs</span><span style='color:{mv}'>{METHOD_TITLES['mean_variance']}</span></div>"
+        "<div class='sub'>Both portfolios are plotted together in each chart: "
+        f"<span class='swatch' style='background:{rb}'></span>{METHOD_TITLES['rule_based']} · "
+        f"<span class='swatch' style='background:{mv}'></span>{METHOD_TITLES['mean_variance']} · "
+        f"<span class='swatch dotted' style='color:{bench}'></span>{METHOD_TITLES['benchmark']} benchmark</div>"
+        "</div>"
+    )
+
+
 def backtest_caption(resp: PortfolioResponse) -> str:
     bt = resp.backtest
-    parts = [f"{bt.start} → {bt.end} ({bt.years_covered:.1f} years)", f"{bt.rebalance} rebalancing",
-             f"${bt.initial_value:,.0f} initial investment, no contributions"]
-    cagr = " · ".join(f"{m.label} CAGR {m.cagr:.1%}" for m in bt.metrics.values())
-    proxy = " · uses sibling-fund proxies before some funds existed" if bt.proxies_used else ""
-    return f"{' · '.join(parts)}{proxy}  \n{cagr}"
+    growth = " · ".join(f"{m.label} {m.cagr:.1%}/yr" for m in bt.metrics.values())
+    return (f"{bt.start} → {bt.end} · {bt.rebalance.capitalize()} rebalancing · "
+            f"{_money_short(bt.initial_value)} initial (see notes)  \nGrowth: {growth}")
 
 
 def notes_markdown(resp: PortfolioResponse) -> str:

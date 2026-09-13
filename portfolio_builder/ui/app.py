@@ -16,6 +16,7 @@ from ..service import (
     get_portfolio_service,
 )
 from . import charts, components
+from .interactions import HEAD
 from .theme import CSS, THEME
 
 logger = logging.getLogger(__name__)
@@ -23,11 +24,11 @@ logger = logging.getLogger(__name__)
 INPUT_FIELDS = ("risk_tolerance", "horizon_years", "initial_investment", "monthly_contribution", "goal",
                 "target_amount", "age", "backtest_years", "rebalance")
 METHODS = ("rule_based", "mean_variance")
+CARD_PARTS = ("header", "donut", "table", "wealth")
 OUTPUT_KEYS = (
     "status", "chips",
-    "header_rule_based", "donut_rule_based", "table_rule_based",
-    "header_mean_variance", "donut_mean_variance", "table_mean_variance",
-    "scatter", "wealth", "backtest_caption", "backtest", "notes",
+    *(f"{part}_{method}" for method in METHODS for part in CARD_PARTS),
+    "scatter", "backtest_caption", "backtest", "notes",
 )
 PRESETS = {level.label: score for level, score in RISK_LABELS.items()}
 CUSTOM = "Custom"
@@ -72,15 +73,16 @@ class Dashboard:
             "status": components.status_panel(warnings=resp.warnings),
             "chips": components.profile_chips(resp),
             "scatter": charts.risk_return_scatter(resp),
-            "wealth": charts.wealth_projection(resp),
             "backtest_caption": components.backtest_caption(resp),
             "backtest": charts.backtest_chart(resp),
             "notes": components.notes_markdown(resp),
         }
+        y_max = charts.wealth_y_max(resp)
         for method in METHODS:
             values_by_key[f"header_{method}"] = components.summary_header(resp, method)
             values_by_key[f"donut_{method}"] = charts.allocation_donut(resp, method)
             values_by_key[f"table_{method}"] = components.holdings_table(resp, method)
+            values_by_key[f"wealth_{method}"] = charts.wealth_projection(resp, method, y_max)
         return tuple(values_by_key[key] for key in OUTPUT_KEYS)
 
 
@@ -137,7 +139,7 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
         )
         chips = gr.HTML()
 
-        # One summary card per portfolio: KPI tiles, then the allocation donut beside the holdings table.
+        # One card per portfolio: KPI tiles; allocation donut beside holdings; projected wealth.
         cards: dict[str, dict[str, Any]] = {}
         with gr.Row(equal_height=True):
             for method in METHODS:
@@ -145,32 +147,34 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
                     header = gr.HTML()
                     with gr.Row():
                         with gr.Column(scale=5, min_width=230):
-                            gr.Markdown("**Allocation by asset class**", elem_classes="card-subtitle")
-                            donut = gr.Plot(show_label=False, container=False)
-                        with gr.Column(scale=6, min_width=250):
-                            gr.Markdown("**Holdings**", elem_classes="card-subtitle")
+                            gr.Markdown("Allocation by Asset Class", elem_classes="card-subtitle")
+                            donut = gr.Plot(show_label=False, container=False, elem_classes="donut-plot")
+                        with gr.Column(scale=6, min_width=270):
+                            gr.Markdown("Holdings", elem_classes="card-subtitle")
                             table = gr.Dataframe(show_label=False, interactive=False, max_height=400,
-                                                 column_widths=["19%", "37%", "20%", "24%"],
+                                                 datatype=components.HOLDINGS_DATATYPES,
+                                                 column_widths=["6%", "18%", "32%", "21%", "23%"],
                                                  elem_classes="holdings-table")
-                cards[method] = {"header": header, "donut": donut, "table": table}
+                    gr.Markdown("Projected Wealth", elem_classes="card-subtitle")
+                    gr.Markdown("Expected (mean), optimistic (75th pct) and pessimistic (25th pct) value from "
+                                "5,000 simulations, including monthly contributions. Same scale in both cards.",
+                                elem_classes="section-caption")
+                    wealth = gr.Plot(show_label=False, container=False, elem_classes="wealth-plot")
+                cards[method] = {"header": header, "donut": donut, "table": table, "wealth": wealth}
 
-        with gr.Column(elem_classes="chart-card"):
-            gr.Markdown("### Risk vs. return", elem_classes="section-title")
-            gr.Markdown("Asset classes, the efficient frontier and both portfolios (annualized estimates).",
-                        elem_classes="section-caption")
-            scatter = gr.Plot(show_label=False)
-
-        with gr.Column(elem_classes="chart-card"):
-            gr.Markdown("### Projected wealth", elem_classes="section-title")
-            gr.Markdown("Initial investment plus monthly contributions over your horizon: expected, optimistic "
-                        "(75th percentile) and pessimistic (25th percentile) scenarios from 5,000 simulations.",
-                        elem_classes="section-caption")
-            wealth = gr.Plot(show_label=False)
-
-        with gr.Column(elem_classes="chart-card"):
-            gr.Markdown("### Historical backtest vs. S&P 500", elem_classes="section-title")
-            bt_caption = gr.Markdown(elem_classes="section-caption")
-            backtest = gr.Plot(show_label=False)
+        # Charts that plot both portfolios together.
+        with gr.Column(elem_classes="comparison-card"):
+            gr.HTML(components.comparison_header())
+            with gr.Row(equal_height=True):
+                with gr.Column(elem_classes="chart-card", min_width=460):
+                    gr.Markdown("### Risk vs. Return", elem_classes="section-title")
+                    gr.Markdown("Annualized expected return vs. volatility for each asset class, cash and both "
+                                "portfolios, with the efficient frontier.", elem_classes="section-caption")
+                    scatter = gr.Plot(show_label=False, container=False)
+                with gr.Column(elem_classes="chart-card", min_width=460):
+                    gr.Markdown("### Historical Backtest vs. S&P 500", elem_classes="section-title")
+                    bt_caption = gr.Markdown(elem_classes="section-caption")
+                    backtest = gr.Plot(show_label=False, container=False)
 
         with gr.Accordion("Notes & assumptions", open=False):
             notes = gr.Markdown()
@@ -179,8 +183,8 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
         inputs = [risk, horizon, initial, monthly, goal, target, age, backtest_years, rebalance]
         components_by_key = {
             "status": status, "chips": chips,
-            **{f"{part}_{m}": cards[m][part] for m in METHODS for part in ("header", "donut", "table")},
-            "scatter": scatter, "wealth": wealth, "backtest_caption": bt_caption, "backtest": backtest, "notes": notes,
+            **{f"{part}_{m}": cards[m][part] for m in METHODS for part in CARD_PARTS},
+            "scatter": scatter, "backtest_caption": bt_caption, "backtest": backtest, "notes": notes,
         }
         outputs = [components_by_key[key] for key in OUTPUT_KEYS]
         run = dict(fn=dashboard.update, inputs=inputs, outputs=outputs, show_progress="minimal")
@@ -214,4 +218,4 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
 
 
 def launch(**kwargs: Any) -> None:
-    build_demo().launch(theme=THEME, css=CSS, **kwargs)
+    build_demo().launch(theme=THEME, css=CSS, head=HEAD, **kwargs)

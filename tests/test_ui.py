@@ -5,6 +5,8 @@ import pytest
 
 from portfolio_builder.ui import Dashboard, build_demo, charts, components
 from portfolio_builder.ui.app import INPUT_FIELDS, OUTPUT_KEYS, default_values, preset_for
+from portfolio_builder.ui.interactions import HEAD
+from portfolio_builder.ui.theme import ASSET_CLASS_COLORS, METHOD_COLORS
 
 
 @pytest.fixture(scope="module")
@@ -31,30 +33,38 @@ def test_allocation_donut_per_portfolio(response):
 
 def test_risk_return_scatter(response):
     names = trace_names(charts.risk_return_scatter(response))
-    assert names == ["Efficient frontier", "Asset classes", "Max Sharpe", "Rule-based portfolio", "Mean-variance portfolio"]
+    assert names == ["Efficient frontier", "Asset classes", "Max Sharpe",
+                     "Rule-based Lifecycle Portfolio", "Mean-variance Optimized Portfolio"]
     fig = charts.risk_return_scatter(response)
     assert len(fig.data[1].x) == 7  # 6 asset classes + cash
     assert fig.data[3].y[0] == response.rule_based.expected_return
 
 
-def test_wealth_projection(response):
-    fig = charts.wealth_projection(response)
-    names = set(trace_names(fig))
-    assert {"Expected (mean)", "Optimistic (75th pct)", "Pessimistic (25th pct)", "Total contributed"} <= names
-    expected = [t for t in fig.data if t.name == "Expected (mean)"]
-    assert len(expected) == 2 and len(expected[0].x) == response.request.horizon_years + 1
-    assert any("Goal" in (a.text or "") for a in fig.layout.annotations)
+def test_wealth_projection_per_portfolio_on_shared_scale(response):
+    y_max = charts.wealth_y_max(response)
+    for method in ("rule_based", "mean_variance"):
+        fig = charts.wealth_projection(response, method, y_max)
+        names = set(trace_names(fig))
+        assert {"Expected (mean)", "Optimistic (75th pct)", "Pessimistic (25th pct)", "Total contributed"} <= names
+        expected = next(t for t in fig.data if t.name == "Expected (mean)")
+        assert len(expected.x) == response.request.horizon_years + 1
+        assert expected.line.color == METHOD_COLORS[method]
+        assert tuple(fig.layout.yaxis.range) == (0, y_max)
+        assert any("Goal" in (a.text or "") for a in fig.layout.annotations)
+    highest = max(p.p75 for m in ("rule_based", "mean_variance") for p in response.recommendation(m).projection.points)
+    assert y_max >= highest
 
 
 def test_backtest_chart(response):
     fig = charts.backtest_chart(response)
-    assert trace_names(fig)[::2] == ["Rule-based", "Mean-variance", "S&P 500 (SPY)"]
+    assert trace_names(fig)[::2] == ["Rule-based Lifecycle Portfolio", "Mean-variance Optimized Portfolio", "S&P 500 (SPY)"]
+    assert [t.line.color for t in fig.data[::2]] == [METHOD_COLORS[k] for k in ("rule_based", "mean_variance", "benchmark")]
     assert len(fig.data) == 6 and len(fig.data[0].x) == len(response.backtest.points)
 
 
 def test_components(response):
-    for method, title in (("rule_based", "Rule-based lifecycle portfolio"),
-                          ("mean_variance", "Mean-variance optimized portfolio")):
+    for method, title in (("rule_based", "Rule-based Lifecycle Portfolio"),
+                          ("mean_variance", "Mean-variance Optimized Portfolio")):
         html = components.summary_header(response, method)
         assert title in html
         for label in ("Exp. return", "Volatility", "Sharpe", "Max drawdown", "Goal odds"):
@@ -64,8 +74,17 @@ def test_components(response):
     assert "Age <b>40</b>" in chips and "$1,500,000" in chips
 
     table = components.holdings_table(response, "rule_based")
-    assert list(table.columns) == ["Ticker", "Asset class", "Weight", "Amount"]
+    assert list(table.columns) == [" ", "Ticker", "Asset class", "Weight", "Amount"]
     assert table["Weight"].str.endswith("%").all() and table["Amount"].str.startswith("$").all()
+    # indicator color matches the asset class's donut slice color
+    donut = charts.allocation_donut(response, "rule_based").data[0]
+    slice_colors = dict(zip(donut.labels, donut.marker.colors))
+    for _, row in table.iterrows():
+        assert f"background-color:{slice_colors[row['Asset class']]}" in row[" "]
+
+    header = components.comparison_header()
+    assert "Rule-based Lifecycle Portfolio" in header and "Mean-variance Optimized Portfolio" in header
+    assert METHOD_COLORS["rule_based"] in header and METHOD_COLORS["mean_variance"] in header
 
     notes = components.notes_markdown(response)
     assert "Assumptions" in notes and "Funds in these portfolios" in notes and "**SPY**: SPY Fund" in notes
@@ -94,16 +113,28 @@ def test_dashboard_update_valid_and_invalid(portfolio_service):
     dashboard = Dashboard(portfolio_service)
     values = default_values()
     out = dict(zip(OUTPUT_KEYS, dashboard.update(*[values[f] for f in INPUT_FIELDS])))
-    assert len(out) == len(OUTPUT_KEYS) == 13
+    assert len(out) == len(OUTPUT_KEYS) == 14
     assert "status" in out["status"]
     for method in ("rule_based", "mean_variance"):
         assert "tiles" in out[f"header_{method}"]
         assert isinstance(out[f"donut_{method}"], go.Figure)
         assert isinstance(out[f"table_{method}"], pd.DataFrame)
-    assert all(isinstance(out[k], go.Figure) for k in ("scatter", "wealth", "backtest"))
+        assert isinstance(out[f"wealth_{method}"], go.Figure)
+    assert all(isinstance(out[k], go.Figure) for k in ("scatter", "backtest"))
 
     bad = {**values, "age": 95, "initial_investment": 5}
     out = dashboard.update(*[bad[f] for f in INPUT_FIELDS])
     assert len(out) == len(OUTPUT_KEYS)
     assert "Please fix 2 inputs" in out[0]
     assert all(o == gr.skip() for o in out[1:])
+
+
+def test_asset_palette_does_not_reuse_portfolio_colors():
+    assert not set(ASSET_CLASS_COLORS.values()) & set(METHOD_COLORS.values())
+    assert len(set(ASSET_CLASS_COLORS.values())) == len(ASSET_CLASS_COLORS)
+
+
+def test_hover_script_targets_card_donut_and_table():
+    for needle in (".portfolio-card", ".donut-plot", "plotly_hover", "plotly_unhover", ".virtual-row",
+                   "Asset class", "row-active", "row-dim"):
+        assert needle in HEAD

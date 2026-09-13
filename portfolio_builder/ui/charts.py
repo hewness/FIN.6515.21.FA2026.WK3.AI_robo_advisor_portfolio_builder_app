@@ -14,11 +14,13 @@ from .theme import (
     GRID_COLOR,
     METHOD_COLORS,
     METHOD_LABELS,
+    METHOD_TITLES,
     MUTED_TEXT,
     TARGET_COLOR,
 )
 
 METHODS = ("rule_based", "mean_variance")
+COMPARISON_HEIGHT = 440  # risk/return and backtest charts sit side by side at the same height
 ASSET_CLASS_ORDER = [ac.name for ac in get_asset_classes()]
 
 
@@ -42,7 +44,7 @@ LABEL_POSITIONS = {
     "Treasury inflation-protected securities": "bottom left",
     "US Aggregate bonds": "bottom right",
     "US large-cap stocks": "top left",
-    "International developed stocks": "top left",
+    "International developed stocks": "top center",
     "Emerging market stocks": "bottom center",
     "Real estate (REITs)": "top center",
 }
@@ -122,15 +124,15 @@ def risk_return_scatter(resp: PortfolioResponse) -> go.Figure:
     if max_sharpe is not None:
         fig.add_trace(go.Scatter(
             x=[max_sharpe.volatility], y=[max_sharpe.expected_return], mode="markers", name="Max Sharpe",
-            marker=dict(symbol="diamond", size=12, color="#FBBF24", line=dict(color="#92400E", width=1)),
+            marker=dict(symbol="diamond-open", size=15, color="#A1A1AA", line=dict(width=2.5)),
             hovertemplate=f"<b>Max Sharpe</b> ({max_sharpe.sharpe_ratio:.2f})<br>Return %{{y:.2%}} · Risk %{{x:.2%}}<extra></extra>",
         ))
     for method in METHODS:
         rec = resp.recommendation(method)
         fig.add_trace(go.Scatter(
-            x=[rec.volatility], y=[rec.expected_return], mode="markers", name=f"{METHOD_LABELS[method]} portfolio",
+            x=[rec.volatility], y=[rec.expected_return], mode="markers", name=METHOD_TITLES[method],
             marker=dict(symbol="star", size=20, color=METHOD_COLORS[method], line=dict(color="white", width=1.5)),
-            hovertemplate=(f"<b>{METHOD_LABELS[method]} portfolio</b><br>Return %{{y:.2%}} · Risk %{{x:.2%}}"
+            hovertemplate=(f"<b>{METHOD_TITLES[method]}</b><br>Return %{{y:.2%}} · Risk %{{x:.2%}}"
                            f"<br>Sharpe {rec.sharpe_ratio:.2f}<extra></extra>"),
         ))
     xs = [p.volatility for p in ef.points] + [a.volatility for a in points]
@@ -138,48 +140,56 @@ def risk_return_scatter(resp: PortfolioResponse) -> go.Figure:
     fig.update_xaxes(title_text="Risk (annual volatility)", tickformat=".0%", range=[-0.01, max(xs) * 1.12])
     fig.update_yaxes(title_text="Expected annual return", tickformat=".0%",
                      range=[min(0.0, min(ys)) - 0.01, max(ys) * 1.12])
-    return _style(fig, height=360, legend_y=-0.2)
+    _style(fig, height=COMPARISON_HEIGHT, legend_y=-0.16)
+    fig.update_layout(legend=dict(font=dict(size=11)))
+    return fig
 
 
-def wealth_projection(resp: PortfolioResponse) -> go.Figure:
-    """Projected value over the horizon: expected, optimistic (p75) and pessimistic (p25) per portfolio."""
-    fig = make_subplots(rows=1, cols=2, shared_yaxes=True, horizontal_spacing=0.04,
-                        subplot_titles=[METHOD_LABELS[m] for m in METHODS])
-    target = resp.rule_based.projection.target_amount
-    for col, method in enumerate(METHODS, start=1):
-        proj = resp.recommendation(method).projection
-        color = METHOD_COLORS[method]
-        years = [p.year for p in proj.points]
-        first = col == 1
-        fig.add_trace(go.Scatter(x=years, y=[p.p75 for p in proj.points], mode="lines", line=dict(width=0),
-                                 showlegend=False, hoverinfo="skip"), row=1, col=col)
-        fig.add_trace(go.Scatter(x=years, y=[p.p25 for p in proj.points], mode="lines", line=dict(width=0),
-                                 fill="tonexty", fillcolor=_rgba(color, 0.14), name="25th–75th percentile range",
-                                 legendgroup="band", showlegend=first, hoverinfo="skip"), row=1, col=col)
-        for key, label, dash, width in (("p75", "Optimistic (75th pct)", "dash", 2),
-                                        ("expected", "Expected (mean)", "solid", 3),
-                                        ("p25", "Pessimistic (25th pct)", "dot", 2)):
-            fig.add_trace(go.Scatter(
-                x=years, y=[getattr(p, key) for p in proj.points], mode="lines", name=label,
-                line=dict(color=color, dash=dash, width=width), legendgroup=key, showlegend=first,
-                hovertemplate=f"{METHOD_LABELS[method]} · {label}<br>Year %{{x}}: $%{{y:,.0f}}<extra></extra>",
-            ), row=1, col=col)
+def wealth_y_max(resp: PortfolioResponse) -> float:
+    """Common y-axis top for both portfolios' projections so the two cards are directly comparable."""
+    highs = [p.p75 for m in METHODS for p in resp.recommendation(m).projection.points]
+    target = resp.rule_based.projection.target_amount or 0.0
+    return max(max(highs), target) * 1.08
+
+
+def wealth_projection(resp: PortfolioResponse, method: str, y_max: float | None = None) -> go.Figure:
+    """One portfolio's projected value: expected (mean), optimistic (p75) and pessimistic (p25) paths."""
+    proj = resp.recommendation(method).projection
+    color = METHOD_COLORS[method]
+    years = [p.year for p in proj.points]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=years, y=[p.p75 for p in proj.points], mode="lines", line=dict(width=0),
+                             showlegend=False, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=years, y=[p.p25 for p in proj.points], mode="lines", line=dict(width=0),
+                             fill="tonexty", fillcolor=_rgba(color, 0.14), name="25th–75th pct range",
+                             hoverinfo="skip"))
+    for key, label, dash, width in (("p75", "Optimistic (75th pct)", "dash", 2),
+                                    ("expected", "Expected (mean)", "solid", 3),
+                                    ("p25", "Pessimistic (25th pct)", "dot", 2)):
         fig.add_trace(go.Scatter(
-            x=years, y=[p.total_contributed for p in proj.points], mode="lines", name="Total contributed",
-            line=dict(color=BENCHMARK_COLOR, dash="dashdot", width=1.5), legendgroup="contrib", showlegend=first,
-            hovertemplate="Contributed by year %{x}: $%{y:,.0f}<extra></extra>",
-        ), row=1, col=col)
-        if target:
-            prob = proj.probability_of_meeting_target
-            fig.add_hline(
-                y=target, row=1, col=col, line=dict(color=TARGET_COLOR, dash="dot", width=2),
-                annotation_text=f"Goal ${target:,.0f}" + (f" · {prob:.0%} chance" if prob is not None else ""),
-                annotation_position="top left", annotation_font=dict(color=TARGET_COLOR, size=11),
-            )
+            x=years, y=[getattr(p, key) for p in proj.points], mode="lines", name=label,
+            line=dict(color=color, dash=dash, width=width),
+            hovertemplate=f"{label}: $%{{y:,.0f}}<extra></extra>",
+        ))
+    fig.add_trace(go.Scatter(
+        x=years, y=[p.total_contributed for p in proj.points], mode="lines", name="Total contributed",
+        line=dict(color=BENCHMARK_COLOR, dash="dashdot", width=1.5),
+        hovertemplate="Total contributed: $%{y:,.0f}<extra></extra>",
+    ))
+    target = proj.target_amount
+    if target:
+        prob = proj.probability_of_meeting_target
+        fig.add_hline(
+            y=target, line=dict(color=TARGET_COLOR, dash="dot", width=2),
+            annotation_text=f"Goal ${target:,.0f}" + (f" · {prob:.0%} chance" if prob is not None else ""),
+            annotation_position="top left", annotation_font=dict(color=TARGET_COLOR, size=11),
+        )
     fig.update_xaxes(title_text="Years from today")
-    fig.update_yaxes(tickprefix="$", tickformat="~s", row=1, col=1)
+    fig.update_yaxes(tickprefix="$", tickformat="~s", range=[0, y_max] if y_max else None)
     fig.update_layout(hovermode="x unified")
-    return _style(fig, height=400, legend_y=-0.2)
+    _style(fig, height=330, legend_y=-0.24)
+    fig.update_layout(margin=dict(l=8, r=8, t=12, b=8), legend=dict(font=dict(size=10.5)))
+    return fig
 
 
 def backtest_chart(resp: PortfolioResponse) -> go.Figure:
@@ -189,7 +199,7 @@ def backtest_chart(resp: PortfolioResponse) -> go.Figure:
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3], vertical_spacing=0.05)
     for key in ("rule_based", "mean_variance", "benchmark"):
         color = METHOD_COLORS[key]
-        label = bt.metrics[key].label if key in bt.metrics else METHOD_LABELS[key]
+        label = METHOD_TITLES[key]
         width = 2 if key == "benchmark" else 2.5
         dash = "dot" if key == "benchmark" else "solid"
         fig.add_trace(go.Scatter(
@@ -206,4 +216,6 @@ def backtest_chart(resp: PortfolioResponse) -> go.Figure:
     fig.update_yaxes(title_text="Portfolio value", tickprefix="$", tickformat="~s", row=1, col=1)
     fig.update_yaxes(title_text="Drawdown", tickformat=".0%", row=2, col=1)
     fig.update_layout(hovermode="x unified")
-    return _style(fig, height=460, legend_y=-0.1)
+    _style(fig, height=COMPARISON_HEIGHT, legend_y=-0.1)
+    fig.update_layout(legend=dict(font=dict(size=11)))
+    return fig

@@ -13,15 +13,22 @@ GRID_COLOR = "rgba(148, 163, 184, 0.25)"
 
 METHOD_COLORS = {"rule_based": RULE_BASED_COLOR, "mean_variance": MEAN_VARIANCE_COLOR, "benchmark": BENCHMARK_COLOR}
 METHOD_LABELS = {"rule_based": "Rule-based", "mean_variance": "Mean-variance", "benchmark": "S&P 500 (SPY)"}
+METHOD_TITLES = {
+    "rule_based": "Rule-based Lifecycle Portfolio",
+    "mean_variance": "Mean-variance Optimized Portfolio",
+    "benchmark": "S&P 500 (SPY)",
+}
 
+# Portfolio colors (indigo / teal / slate) are reserved for portfolios and the benchmark, so the
+# asset-class palette avoids those hues: warm tones for stocks, greens for bonds, warm gray for cash.
 ASSET_CLASS_COLORS = {
-    "US large-cap stocks": "#2563EB",
-    "International developed stocks": "#7C3AED",
+    "US large-cap stocks": "#EA580C",
+    "International developed stocks": "#CA8A04",
     "Emerging market stocks": "#DB2777",
-    "Real estate (REITs)": "#F59E0B",
-    "US Aggregate bonds": "#10B981",
-    "Treasury inflation-protected securities": "#06B6D4",
-    "Cash and Money Markets": "#94A3B8",
+    "Real estate (REITs)": "#92400E",
+    "US Aggregate bonds": "#16A34A",
+    "Treasury inflation-protected securities": "#65A30D",
+    "Cash and Money Markets": "#A8A29E",
 }
 ASSET_CLASS_SHORT = {
     "US large-cap stocks": "US large-cap",
@@ -73,11 +80,37 @@ CSS = """
 .holdings-table th, .holdings-table td { padding: .28rem .3rem !important; }
 .holdings-table .cell-wrap { padding: 0 .1rem !important; }
 .holdings-table .cell-menu-button { display: none !important; }
-.holdings-table td:nth-child(3), .holdings-table td:nth-child(4),
-.holdings-table th:nth-child(3), .holdings-table th:nth-child(4) { text-align: right !important; }
-.holdings-table td:nth-child(1) { font-weight: 650; }
-.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin-bottom: .6rem; }
-.card-head .name { font-weight: 700; font-size: 1rem; }
+/* Gradio 6 body cells are div[role=gridcell][data-col]; header cells are th[data-heading]. */
+.holdings-table [data-col="3"] .cell-wrap, .holdings-table [data-col="4"] .cell-wrap,
+.holdings-table th[data-heading="3"] .cell-wrap, .holdings-table th[data-heading="4"] .cell-wrap {
+  justify-content: flex-end !important; text-align: right !important; }
+.holdings-table [data-col="1"] span { font-weight: 650; }
+.holdings-table [data-col="0"] .cell-wrap { justify-content: center !important; }
+.asset-dot { display: inline-block; width: .72rem; height: .72rem; border-radius: 3px; vertical-align: middle;
+             box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08); }
+.holdings-table .virtual-row [role=gridcell] { transition: opacity .15s ease, background-color .15s ease; }
+.holdings-table .virtual-row.row-active [role=gridcell] {
+  background: color-mix(in srgb, var(--row-accent) 20%, transparent) !important; }
+.holdings-table .virtual-row.row-active [role=gridcell] span { font-weight: 700; }
+.holdings-table .virtual-row.row-dim [role=gridcell] { opacity: .32; }
+.card-subtitle p { font-weight: 600; }
+.donut-plot .modebar-container, .wealth-plot .modebar-container { display: none !important; }
+
+.comparison-card { background: linear-gradient(90deg, #4F46E5 0 50%, #0D9488 50% 100%) top / 100% 4px no-repeat,
+                               var(--block-background-fill) !important;
+                   border: 1px solid var(--border-color-primary) !important; overflow: hidden;
+                   border-radius: 14px !important; padding: 1rem 1rem .6rem !important; gap: .5rem !important; }
+.comparison-card > .block { flex-grow: 0 !important; }
+.comparison-head .title { font-size: 1.12rem; font-weight: 700; line-height: 1.35; }
+.comparison-head .title .vs { color: var(--body-text-color-subdued); font-weight: 500; margin: 0 .4rem; }
+.comparison-head .sub { color: var(--body-text-color-subdued); font-size: .85rem; margin-top: .15rem; }
+.swatch { display: inline-block; width: 1.1rem; height: .28rem; border-radius: 2px; vertical-align: middle;
+          margin: 0 .3rem 0 .15rem; }
+.swatch.dotted { background: repeating-linear-gradient(90deg, currentColor 0 .22rem, transparent .22rem .4rem) !important; }
+.comparison-card .chart-card { background: var(--background-fill-secondary); }
+.comparison-card .section-caption { min-height: 2.9rem; }
+.card-head { display: flex; flex-direction: column; gap: .1rem; margin-bottom: .6rem; }
+.card-head .name { font-weight: 700; font-size: 1.12rem; line-height: 1.3; }
 .card-head .desc { color: var(--body-text-color-subdued); font-size: .8rem; }
 .tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; }
 @media (max-width: 1100px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
