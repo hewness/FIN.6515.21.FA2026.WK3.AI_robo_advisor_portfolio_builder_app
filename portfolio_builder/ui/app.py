@@ -221,6 +221,10 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
                     wealth = gr.Plot(show_label=False, container=False, elem_classes="wealth-plot")
                 cards[method] = {"header": header, "donut": donut, "table": table, "wealth": wealth}
 
+        # Where the research-informed model departs from popular rules of thumb, and why.
+        with gr.Column(elem_classes="insight-card"):
+            insight = gr.HTML()
+
         # Charts that plot all portfolios together.
         with gr.Column(elem_classes="comparison-card"):
             gr.HTML(components.comparison_header())
@@ -234,10 +238,6 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
                     gr.Markdown("### Historical Backtest vs. S&P 500", elem_classes="section-title")
                     bt_caption = gr.Markdown(elem_classes="section-caption")
                     backtest = gr.Plot(show_label=False, container=False)
-
-        # Where the research-informed model departs from popular rules of thumb, and why.
-        with gr.Column(elem_classes="insight-card"):
-            insight = gr.HTML()
 
         with gr.Accordion("Notes & assumptions", open=False):
             notes = gr.Markdown()

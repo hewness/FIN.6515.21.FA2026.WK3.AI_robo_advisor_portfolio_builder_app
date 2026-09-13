@@ -174,8 +174,11 @@ CSS = """
 .eq-bar.main .track { height: .95rem; }
 .eq-bar.popular .lbl { color: var(--body-text-color-subdued); }
 .insight .legend-note { font-size: .74rem; color: var(--body-text-color-subdued); margin-top: .5rem; line-height: 1.4; }
-.insight ul.points { margin: 0; padding: 0; list-style: none; display: grid; gap: .55rem; }
-.insight ul.points li { position: relative; padding-left: 1.15rem; font-size: .86rem; line-height: 1.45; }
+.insight ul.points { margin: 0 !important; padding: 0 !important; list-style: none !important; display: grid; gap: .55rem; }
+/* Only the violet dot: Gradio's prose styles would otherwise add a default list marker too. */
+.insight ul.points li { position: relative; padding-left: 1.15rem !important; margin: 0 !important; font-size: .86rem;
+                        line-height: 1.45; list-style: none !important; }
+.insight ul.points li::marker { content: none; }
 .insight ul.points li::before { content: ""; position: absolute; left: 0; top: .5em; width: .5rem; height: .5rem;
                                 border-radius: 50%; background: #9333EA; }
 .insight .sources { font-size: .72rem; color: var(--body-text-color-subdued); margin-top: .7rem; line-height: 1.4; }
