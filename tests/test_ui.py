@@ -227,3 +227,17 @@ def test_glide_path_toggle(portfolio_service):
     assert "Hump-shaped glide path" in on["chips"] and "Linear" in off["chips"]
     assert on["scatter"].data[0].name != off["scatter"].data[0].name
     assert not on["table_rule_based"].equals(off["table_rule_based"])
+
+
+
+def test_about_you_fields_are_inline(portfolio_service):
+    from portfolio_builder.ui.theme import CSS
+
+    demo = build_demo(portfolio_service)
+    by_id = {b.elem_id: b for b in demo.blocks.values() if getattr(b, "elem_id", None)}
+    for elem_id in ("in-age", "in-goal", "in-target"):
+        classes = by_id[elem_id].elem_classes
+        assert "inline-field" in (classes if isinstance(classes, list) else [classes])
+    assert "money-input" in by_id["in-target"].elem_classes  # still formats as money
+    assert "inline-field" not in (by_id["in-initial"].elem_classes or [])  # other fields keep the stacked layout
+    assert ".inline-field > .container" in CSS and "flex-direction: row" in CSS

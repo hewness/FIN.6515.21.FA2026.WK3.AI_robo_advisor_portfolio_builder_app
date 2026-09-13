@@ -155,4 +155,12 @@ footer { display: none !important; }
 .has-tip:hover::before { opacity: 1; transform: translateY(0); }
 .has-tip:hover::after { opacity: 1; }
 .money-input input { font-variant-numeric: tabular-nums; }
+
+/* Compact sidebar fields: label and input on one row (Age, Financial goal, Goal target). */
+.inline-field { padding-top: .45rem !important; padding-bottom: .45rem !important; }
+.inline-field > .container { display: flex !important; flex-direction: row !important; align-items: center !important;
+                             gap: .6rem !important; }
+.inline-field > .container > [data-testid="block-info"] { flex: 0 0 8.4rem; margin: 0 !important; white-space: nowrap; }
+.inline-field > .container > input, .inline-field > .container > .input-container,
+.inline-field > .container > .wrap { flex: 1 1 auto; min-width: 0; margin: 0 !important; }
 """

@@ -135,11 +135,14 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
             gr.Markdown("## 🧭 Build your plan", elem_classes="sb-title")
 
             gr.Markdown("### About you", elem_classes="sb-section")
-            age = gr.Number(label="Age", value=defaults["age"], precision=0, elem_id="in-age")
+            age = gr.Number(label="Age", value=defaults["age"], precision=0, elem_id="in-age",
+                            elem_classes="inline-field")
             goal = gr.Dropdown(label="Financial goal", value=defaults["goal"], elem_id="in-goal",
+                               elem_classes="inline-field",
                                choices=[(c["label"], c["value"]) for c in opts["goal"]["choices"]])
             target = gr.Textbox(label="Goal target", value=format_money(defaults["target_amount"]), max_lines=1,
-                                placeholder="$1,500,000", elem_id="in-target", elem_classes="money-input")
+                                placeholder="$1,500,000", elem_id="in-target",
+                                elem_classes=["money-input", "inline-field"])
 
             gr.Markdown("### Risk profile", elem_classes="sb-section")
             glide = gr.Checkbox(label="Hump-shaped equity glide path", value=defaults["hump_glide_path"],
