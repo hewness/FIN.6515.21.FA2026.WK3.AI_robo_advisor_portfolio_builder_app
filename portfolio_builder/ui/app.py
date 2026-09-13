@@ -140,7 +140,7 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
     with gr.Blocks(title="AI Robo-Advisor Portfolio Builder", fill_width=True) as demo:
         # ---------------- Sidebar: grouped inputs ----------------
         # Help text lives in hover tooltips on each label (see SIDEBAR_TOOLTIPS / interactions.py).
-        with gr.Sidebar(width=360, open=True, label="Inputs"):
+        with gr.Sidebar(width=400, open=True, label="Inputs"):
             gr.Markdown("## 🧭 Build your plan", elem_classes="sb-title")
 
             gr.Markdown("### About you", elem_classes="sb-section")
@@ -170,21 +170,25 @@ def build_demo(service: PortfolioService | None = None) -> gr.Blocks:
                                       elem_classes="inline-field")
             risk = gr.Slider(label="Risk score", minimum=opts["risk_tolerance"]["minimum"],
                              maximum=opts["risk_tolerance"]["maximum"], step=opts["risk_tolerance"]["step"],
-                             value=defaults["risk_tolerance"], elem_id="in-risk")
+                             value=defaults["risk_tolerance"], elem_id="in-risk", elem_classes="inline-slider")
 
             gr.Markdown("### Investment plan", elem_classes="sb-section")
             initial = gr.Textbox(label="Initial investment", value=format_money(defaults["initial_investment"]),
-                                 max_lines=1, placeholder="$50,000", elem_id="in-initial", elem_classes="money-input")
+                                 max_lines=1, placeholder="$50,000", elem_id="in-initial",
+                                 elem_classes=["money-input", "inline-field"])
             monthly = gr.Textbox(label="Monthly contribution", value=format_money(defaults["monthly_contribution"]),
-                                 max_lines=1, placeholder="$1,000", elem_id="in-monthly", elem_classes="money-input")
-            horizon = gr.Slider(label="Investment horizon (years)", minimum=1, maximum=30, step=1,
-                                value=defaults["horizon_years"], elem_id="in-horizon")
+                                 max_lines=1, placeholder="$1,000", elem_id="in-monthly",
+                                 elem_classes=["money-input", "inline-field"])
+            horizon = gr.Slider(label="Investment horizon (yrs)", minimum=1, maximum=30, step=1,
+                                value=defaults["horizon_years"], elem_id="in-horizon", elem_classes="inline-slider")
 
             with gr.Accordion("⚙️ Backtest settings", open=False):
-                backtest_years = gr.Slider(label="Lookback (years)", minimum=10, maximum=20, step=1,
-                                           value=defaults["backtest_years"], elem_id="in-lookback")
-                rebalance = gr.Radio(label="Rebalancing", value=defaults["rebalance"], elem_id="in-rebalance",
-                                     choices=[(c["label"], c["value"]) for c in opts["rebalance"]["choices"]])
+                backtest_years = gr.Slider(label="Lookback (yrs)", minimum=10, maximum=20, step=1,
+                                           value=defaults["backtest_years"], elem_id="in-lookback",
+                                           elem_classes="inline-slider")
+                rebalance = gr.Dropdown(label="Rebalancing", value=defaults["rebalance"], elem_id="in-rebalance",
+                                        choices=[(c["label"], c["value"]) for c in opts["rebalance"]["choices"]],
+                                        elem_classes="inline-field")
 
             status = gr.HTML(components.status_panel())
             reset = gr.Button("↺ Reset to defaults", variant="secondary", size="sm")

@@ -29,7 +29,7 @@ Then open http://127.0.0.1:7860.
 
 `app.py` launches a Gradio dashboard (`portfolio_builder/ui`) that compares three portfolios side by side: rule-based, mean-variance and research-informed.
 
-**Sidebar inputs** (defaults in brackets). The dashboard updates when you release a slider, change a choice, or leave a text field. Money fields format as you type (`$#,000`) and accept shorthand such as `50k` or `1.2m`. Hover over a label's ⓘ to see what the input does and its allowed range.
+**Sidebar inputs** (defaults in brackets). The dashboard updates when you release a slider, change a choice, or leave a text field. Money fields format as you type (`$#,000`) and accept shorthand such as `50k` or `1.2m`. Each label sits beside its input, with all labels in one column so the inputs line up; sliders show their number box beside the label and the track below. Hover over a label's ⓘ to see what the input does and its allowed range.
 
 | Group | Input | Control | Range / options | Default |
 |---|---|---|---|---|
@@ -43,9 +43,9 @@ Then open http://127.0.0.1:7860.
 | | Risk tolerance | Dropdown (Conservative / Moderate / Aggressive / Custom) + 1–10 slider | presets = 3 / 5.5 / 8 | Moderate (5.5) |
 | Investment plan | Initial investment | Money text | $1,000–$10,000,000 | $50,000 |
 | | Monthly contribution | Money text | $0–$50,000 | $1,000 |
-| | Investment horizon | Slider | 1–30 years | 25 |
-| Backtest settings | Lookback | Slider | 10–20 years | 10 |
-| | Rebalancing | Radio | Monthly / Quarterly / Annual | Quarterly |
+| | Investment horizon (yrs) | Slider | 1–30 years | 25 |
+| Backtest settings | Lookback (yrs) | Slider | 10–20 years | 10 |
+| | Rebalancing | Dropdown | Monthly / Quarterly / Annual | Quarterly |
 
 Invalid inputs are listed in a red status box in the sidebar, and the charts keep the last valid results. Input combinations worth a second look (an unreachable target, a horizon beyond age 75, a very long home or education horizon, a capped short horizon, $0 income before retirement age) show an amber warning.
 

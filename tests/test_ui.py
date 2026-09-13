@@ -259,12 +259,22 @@ def test_about_you_fields_are_inline(portfolio_service):
 
     demo = build_demo(portfolio_service)
     by_id = {b.elem_id: b for b in demo.blocks.values() if getattr(b, "elem_id", None)}
-    for elem_id in ("in-age", "in-goal", "in-target", "in-risk-preset"):
-        classes = by_id[elem_id].elem_classes
-        assert "inline-field" in (classes if isinstance(classes, list) else [classes])
-    assert "money-input" in by_id["in-target"].elem_classes  # still formats as money
-    assert "inline-field" not in (by_id["in-initial"].elem_classes or [])  # other fields keep the stacked layout
-    assert ".inline-field > .container" in CSS and "flex-direction: row" in CSS
+    def classes(elem_id):
+        value = by_id[elem_id].elem_classes or []
+        return value if isinstance(value, list) else [value]
+
+    for elem_id in ("in-age", "in-goal", "in-target", "in-income", "in-retire-income", "in-retire-age",
+                    "in-risk-preset", "in-initial", "in-monthly", "in-rebalance"):
+        assert "inline-field" in classes(elem_id)
+    for elem_id in ("in-target", "in-initial", "in-monthly"):
+        assert "money-input" in classes(elem_id)  # still formats as money
+    for elem_id in ("in-risk", "in-horizon", "in-lookback"):
+        assert "inline-slider" in classes(elem_id)  # number box beside the label, track below
+    assert isinstance(by_id["in-rebalance"], gr.Dropdown)
+    assert [c[1] for c in by_id["in-rebalance"].choices] == ["monthly", "quarterly", "annual"]
+    assert by_id["in-horizon"].label == "Investment horizon (yrs)" and by_id["in-lookback"].label == "Lookback (yrs)"
+    assert ".inline-field > .container" in CSS and "flex-direction: row" in CSS and ".inline-slider .head" in CSS
+    assert "--inline-label-width" in CSS
 
 
 

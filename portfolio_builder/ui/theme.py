@@ -205,13 +205,25 @@ footer { display: none !important; }
 .has-tip:hover::after { opacity: 1; }
 .money-input input { font-variant-numeric: tabular-nums; }
 
-/* Compact sidebar fields: label and input on one row (Age, Financial goal, Goal target). */
-.inline-field { padding-top: .45rem !important; padding-bottom: .45rem !important; }
+/* Compact sidebar fields: label and input on one row, with every label in the same-width column so the inputs line
+   up. Sliders keep their track on a second, full-width row (the sidebar is too narrow for label + track + number). */
+:root { --inline-label-width: 10.8rem; }
+.inline-field, .inline-slider { padding-top: .45rem !important; padding-bottom: .45rem !important; }
+.inline-field [data-testid="block-info"], .inline-slider [data-testid="block-info"] {
+  font-size: 12px !important; padding-left: 5px !important; padding-right: 5px !important; white-space: nowrap;
+  box-sizing: border-box; }
 .inline-field > .container { display: flex !important; flex-direction: row !important; align-items: center !important;
                              gap: .6rem !important; }
-.inline-field > .container > [data-testid="block-info"] { flex: 0 0 8.4rem; margin: 0 !important; white-space: nowrap; }
+.inline-field > .container > [data-testid="block-info"] { flex: 0 0 var(--inline-label-width);
+                                                          width: var(--inline-label-width); margin: 0 !important; }
 .inline-field > .container > input, .inline-field > .container > .input-container,
 .inline-field > .container > .wrap { flex: 1 1 auto; min-width: 0; margin: 0 !important; }
+.inline-slider .head { display: grid !important; grid-template-columns: var(--inline-label-width) minmax(0, 1fr);
+                       align-items: center; column-gap: .6rem; }
+.inline-slider .head > label { min-width: 0; margin: 0 !important; }
+.inline-slider .head > label > [data-testid="block-info"] { display: block; width: var(--inline-label-width); }
+.inline-slider .head > .tab-like-container { display: flex; width: 100%; min-width: 0; }
+.inline-slider .head > .tab-like-container > input[type=number] { flex: 1 1 auto; width: auto; min-width: 0; }
 """
 
 # Every holdings table reserves room for the largest possible portfolio (each universe fund + cash; rendered
