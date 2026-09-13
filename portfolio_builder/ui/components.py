@@ -19,8 +19,8 @@ from .theme import (
     METHODS,
     POPULAR_RULE_COLOR,
 )
-HOLDINGS_COLUMNS = [" ", "Ticker", "Asset class", "Weight", "Amount"]
-HOLDINGS_DATATYPES = ["html", "str", "str", "str", "str"]
+HOLDINGS_COLUMNS = [" ", "Ticker", "Asset class", "Exp. ret.", "Weight", "Amount"]
+HOLDINGS_DATATYPES = ["html", "str", "str", "str", "str", "str"]
 
 
 def _tile(label: str, value: str, sub: str = "", tooltip: str = "", css: str = "") -> str:
@@ -143,12 +143,18 @@ def asset_dot(asset_class: str) -> str:
     return f"<span class='asset-dot' style='background-color:{color}' title='{escape(asset_class)}'></span>"
 
 
+def holding_amount(amount: float) -> str:
+    """Whole dollars, switching to $1.57M style from $1M so the narrow Amount column never truncates."""
+    return f"${amount / 1e6:,.2f}M" if amount >= 999_995 else f"${amount:,.0f}"
+
+
 def holdings_table(resp: PortfolioResponse, method: str) -> pd.DataFrame:
     rec = resp.recommendation(method)
     return pd.DataFrame(
         [{" ": asset_dot(h.asset_class), "Ticker": h.ticker,
           "Asset class": ASSET_CLASS_SHORT.get(h.asset_class, h.asset_class),
-          "Weight": f"{h.weight:.1%}", "Amount": f"${h.amount:,.0f}"}
+          "Exp. ret.": f"{h.expected_return:.1%}" if h.expected_return is not None else "—",
+          "Weight": f"{h.weight:.1%}", "Amount": holding_amount(h.amount)}
          for h in rec.holdings],
         columns=HOLDINGS_COLUMNS,
     )

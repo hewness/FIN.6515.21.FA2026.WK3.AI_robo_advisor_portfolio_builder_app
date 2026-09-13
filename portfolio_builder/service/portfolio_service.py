@@ -188,7 +188,7 @@ class PortfolioService:
             human_capital=float(research.details["human_capital"]),
             research_equity_target=float(research.details["equity_pct"]),
         )
-        recs = {method: self._recommendation(method, result, req, names, frontier_points)
+        recs = {method: self._recommendation(method, result, req, names, frontier_points, inputs)
                 for method, result in results.items()}
         for method, rec in recs.items():
             rec.max_drawdown = backtest.metrics[method].max_drawdown
@@ -224,14 +224,17 @@ class PortfolioService:
         req: PortfolioRequest,
         names: dict[str, str],
         frontier_points: pd.DataFrame,
+        inputs: MarketInputs,
     ) -> PortfolioRecommendation:
         weights = result.weights[result.weights > 0].sort_values(ascending=False)
         amounts = _allocate_amounts(weights, req.initial_investment)
         holdings = []
         for ticker, weight in weights.items():
             asset_class = get_asset_class("cash") if ticker == CASH else get_asset_class_for_ticker(ticker)
+            expected = inputs.risk_free_rate if ticker == CASH else inputs.expected_returns.get(ticker)
             holdings.append(Holding(ticker=ticker, name=names.get(ticker, ticker), asset_class=asset_class.name,
-                                    role=asset_class.role, weight=float(weight), amount=amounts[ticker]))
+                                    role=asset_class.role, weight=float(weight), amount=amounts[ticker],
+                                    expected_return=None if expected is None else float(expected)))
 
         classes: dict[str, AssetClassAllocation] = {}
         for h in holdings:

@@ -90,16 +90,19 @@ CSS = """
 .portfolio-card > .block { flex-grow: 0 !important; }
 .card-subtitle p { margin: .35rem 0 0 !important; font-size: .82rem; color: var(--body-text-color-subdued); }
 .holdings-table table, .holdings-table th, .holdings-table td, .holdings-table span, .holdings-table input {
-  font-family: var(--font) !important; font-size: .8rem !important; white-space: nowrap !important; }
-.holdings-table th, .holdings-table td { padding: .28rem .3rem !important; }
+  font-family: var(--font) !important; font-size: .75rem !important; white-space: nowrap !important; }
+.holdings-table th, .holdings-table td { padding: .28rem .18rem !important; }
 .holdings-table .cell-wrap { padding: 0 .1rem !important; }
 .holdings-table .cell-menu-button { display: none !important; }
 /* Gradio 6 body cells are div[role=gridcell][data-col]; header cells are th[data-heading]. */
 .holdings-table [data-col="3"] .cell-wrap, .holdings-table [data-col="4"] .cell-wrap,
-.holdings-table th[data-heading="3"] .cell-wrap, .holdings-table th[data-heading="4"] .cell-wrap {
+.holdings-table [data-col="5"] .cell-wrap, .holdings-table th[data-heading="3"] .cell-wrap,
+.holdings-table th[data-heading="4"] .cell-wrap, .holdings-table th[data-heading="5"] .cell-wrap {
   justify-content: flex-end !important; text-align: right !important; }
 .holdings-table [data-col="1"] span { font-weight: 650; }
-.holdings-table [data-col="0"] .cell-wrap { justify-content: center !important; }
+.holdings-table [data-col="0"] .cell-wrap { justify-content: center !important; padding: 0 !important; }
+.holdings-table [data-col="0"] .cell-wrap > span { display: flex !important; align-items: center; justify-content: center;
+                                                  width: 100%; }
 .asset-dot { display: inline-block; width: .72rem; height: .72rem; border-radius: 3px; vertical-align: middle;
              box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08); }
 .holdings-table .virtual-row [role=gridcell] { transition: opacity .15s ease, background-color .15s ease; }

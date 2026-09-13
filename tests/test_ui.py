@@ -103,8 +103,13 @@ def test_components(response):
     assert "human capital" in components.equity_basis(response, "research_informed")[1]
 
     table = components.holdings_table(response, "rule_based")
-    assert list(table.columns) == [" ", "Ticker", "Asset class", "Weight", "Amount"]
+    assert list(table.columns) == [" ", "Ticker", "Asset class", "Exp. ret.", "Weight", "Amount"]
     assert table["Weight"].str.endswith("%").all() and table["Amount"].str.startswith("$").all()
+    assert table["Exp. ret."].str.endswith("%").all()
+    assert [components.holding_amount(v) for v in (21_847.4, 999_000, 1_570_508, 7_850_000)] == [
+        "$21,847", "$999,000", "$1.57M", "$7.85M"]
+    vti = next(h for h in response.rule_based.holdings if h.ticker == "VTI")
+    assert table.loc[table["Ticker"] == "VTI", "Exp. ret."].item() == f"{vti.expected_return:.1%}"
     # indicator color matches the asset class's donut slice color
     donut = charts.allocation_donut(response, "rule_based").data[0]
     slice_colors = dict(zip(donut.labels, donut.marker.colors))

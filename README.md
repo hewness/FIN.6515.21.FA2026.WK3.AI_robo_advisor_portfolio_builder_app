@@ -53,7 +53,7 @@ Invalid inputs are listed in a red status box in the sidebar, and the charts kee
 - **A card for each portfolio** (Rule-based Lifecycle Portfolio in indigo, Mean-variance Optimized Portfolio in teal, Research-informed Portfolio in violet), three across; on narrow screens they stack. Inside each card the panels stack:
   - A one-line **equity basis**: how that card's stock share was set (glide path, equity band, or the practical finance formula with its numbers).
   - Tiles (three over two) for expected annual return, volatility, Sharpe ratio, maximum historical drawdown (from the backtest), and probability of reaching the goal (share of 5,000 simulated outcomes at or above the target).
-  - An allocation-by-asset-class donut above the holdings table. The table reserves room for every holding (up to 6 funds plus cash), so it never scrolls, and each section lines up across the three cards. Each holding row starts with a color swatch that matches its asset class's slice. Hovering over (or tapping) a slice highlights that asset class's holdings and dims the rest.
+  - An allocation-by-asset-class donut above the holdings table. The table reserves room for every holding (up to 6 funds plus cash), so it never scrolls, and each section lines up across the three cards. Each holding row starts with a color swatch that matches its asset class's slice, and shows the fund's annualized expected return (Exp. ret., the same estimate the optimizer uses; weights times these returns give the portfolio's expected return), its weight and its dollar amount. Hovering over (or tapping) a slice highlights that asset class's holdings and dims the rest.
   - Projected wealth: expected (mean), optimistic (75th percentile) and pessimistic (25th percentile) paths, including contributions, with the goal target line. All cards use the same scale.
 - **Research vs. Popular Wisdom:** bars comparing the stock share of the three portfolios with two popular rules of thumb (100 − age, and a typical target-date fund), next to a short explanation of where the research-informed model disagrees with popular advice and why, citing the papers. See [Research-informed model](#research-informed-model).
 - **Rule-based vs Mean-variance vs Research-informed:** a comparison container with two charts side by side that each plot all three portfolios.
@@ -240,7 +240,7 @@ except InputValidationError as exc:
     exc.field_errors                  # {"age": "Age must be a number between 18 and 80", ...}
 
 response.profile                      # entered vs. effective risk tolerance, risk band, horizon adjustment
-response.rule_based.holdings          # ticker, fund name, asset class, role, weight, $ amount
+response.rule_based.holdings          # ticker, fund name, asset class, role, weight, $ amount, expected return
 response.mean_variance.frontier_position   # return gap vs. the frontier, position 0..1, on_frontier
 response.research_informed.details    # equity_pct, merton_share, human_capital, risk_aversion, ...
 response.research_insight             # equity comparisons vs. popular rules, headline, points, sources

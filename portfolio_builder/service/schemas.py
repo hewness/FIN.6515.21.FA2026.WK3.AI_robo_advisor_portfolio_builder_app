@@ -233,6 +233,7 @@ class Holding(BaseModel):
     role: str
     weight: float
     amount: float
+    expected_return: float | None = None  # annualized estimate for this fund (cash: the risk-free rate)
 
 
 class AssetClassAllocation(BaseModel):

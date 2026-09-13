@@ -71,7 +71,8 @@ def test_mean_variance_on_frontier(response):
 
 
 def test_dataframe_helpers(response):
-    assert list(response.holdings_frame("rule_based").columns) == ["ticker", "name", "asset_class", "role", "weight", "amount"]
+    assert list(response.holdings_frame("rule_based").columns) == ["ticker", "name", "asset_class", "role", "weight",
+                                                                   "amount", "expected_return"]
     assert list(response.asset_class_frame("mean_variance").columns)[:2] == ["asset_class", "role"]
     assert len(response.projection_frame("mean_variance")) == 21
     frontier = response.frontier_frame()
@@ -287,3 +288,13 @@ def test_income_fields_do_not_change_other_models(portfolio_service, response):
 def test_zero_income_before_retirement_warns(portfolio_service):
     resp = portfolio_service.build_portfolio({**REQUEST, "annual_income": 0})
     assert any("Annual income is $0" in w for w in resp.warnings)
+
+
+@pytest.mark.parametrize("method", ["rule_based", "mean_variance", "research_informed"])
+def test_holdings_expected_returns_add_up_to_portfolio(response, method, portfolio_service):
+    rec = response.recommendation(method)
+    inputs = portfolio_service.engine.market_inputs()
+    for h in rec.holdings:
+        expected = inputs.risk_free_rate if h.ticker == "CASH" else inputs.expected_returns[h.ticker]
+        assert h.expected_return == pytest.approx(expected)
+    assert sum(h.weight * h.expected_return for h in rec.holdings) == pytest.approx(rec.expected_return)
