@@ -55,6 +55,15 @@ class FakeConnector:
         return {"longName": f"{ticker} Fund", "netExpenseRatio": 0.05}
 
 
+class LongHistoryConnector(FakeConnector):
+    """Five years of daily data so monthly estimation has enough observations."""
+
+    def fetch_history(self, ticker, start=None, end=None):
+        self.history_calls[ticker] += 1
+        seed = sum(map(ord, ticker))
+        return make_history(start="2018-01-01", periods=1300, seed=seed)
+
+
 @pytest.fixture
 def cache(tmp_path) -> ParquetCache:
     return ParquetCache(tmp_path / "cache")

@@ -110,6 +110,47 @@ python -m portfolio_builder.optimization --age 55 --risk 4 --method mean_varianc
 
 Unconstrained mean-variance results depend heavily on the historical sample. Since 2012, SPY has had the best return and Sharpe ratio, so the frontier is mostly SPY blended with short-term TIPS. Use `max_weight` (or `--lookback-years`) for more diversified portfolios.
 
+## Service layer
+
+`portfolio_builder/service` connects a UI to the optimization engine. It checks the client's form inputs, runs both approaches on the cached market data, and returns one response ready to display.
+
+| Input | Range | Effect |
+|---|---|---|
+| `risk_tolerance` | 1–10, or `conservative` (3) / `moderate` (5.5) / `aggressive` (8) | Sets the equity vs. bond mix |
+| `horizon_years` | 1–30 | Adjusts risk: under 3 years capped at 3; 3–4 years −2; 5–9 years −1; 10–19 years no change; 20+ years +1 |
+| `initial_investment` | $1,000–$10,000,000 | Converted to a dollar amount for each holding |
+| `monthly_contribution` | $0–$50,000 | Included in the projection |
+| `goal` | retirement / home purchase / education / general wealth | Adds goal-specific notes |
+| `age` | 18–80 | Used in the rule-based lifecycle allocation |
+
+```python
+from portfolio_builder.service import InputValidationError, get_form_options, recommend_portfolio
+
+options = get_form_options()          # label, help, widget, min/max/step, default, choices for each field
+
+try:
+    response = recommend_portfolio(risk_tolerance="moderate", horizon_years=20, initial_investment=100_000,
+                                   monthly_contribution=1_000, goal="retirement", age=45)
+except InputValidationError as exc:
+    exc.field_errors                  # {"age": "Age must be a number between 18 and 80", ...}
+
+response.profile                      # entered vs. effective risk tolerance, risk band, horizon adjustment
+response.rule_based.holdings          # ticker, fund name, asset class, role, weight, $ amount
+response.mean_variance.frontier_position   # return gap vs. the frontier, position 0..1, on_frontier
+response.efficient_frontier           # frontier points, reference portfolios, client and rule-based points
+response.notes                        # goal and horizon context
+response.holdings_frame("mean_variance")   # DataFrames for tables and charts:
+response.frontier_frame()             #   also asset_class_frame, projection_frame, comparison_frame
+response.to_dict()                    # JSON-safe dict
+```
+
+Projections show value at each year end, with each month's contribution added after that month's growth. They include an expected path plus 10th/50th/90th percentile bands from 5,000 lognormal simulations with a fixed seed, so repeated runs give the same result. The service loads the engine once per process and is safe to call from concurrent requests.
+
+```bash
+python -m portfolio_builder.service --age 45 --risk moderate --horizon 20 --initial 100000 --monthly 1000 --goal retirement
+python -m portfolio_builder.service --age 30 --risk aggressive --horizon 2 --goal home_purchase --json
+```
+
 ## Tests
 
 ```bash

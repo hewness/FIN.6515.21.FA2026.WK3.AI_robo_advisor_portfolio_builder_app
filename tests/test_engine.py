@@ -12,18 +12,9 @@ from portfolio_builder.optimization import (
 )
 from portfolio_builder.universe import get_tickers
 
-from .conftest import FakeConnector, make_history
+from .conftest import FakeConnector, LongHistoryConnector
 
 PROFILE = InvestorProfile(age=40, risk_tolerance=6)
-
-
-class LongHistoryConnector(FakeConnector):
-    """Five years of daily data so monthly estimation has enough observations."""
-
-    def fetch_history(self, ticker, start=None, end=None):
-        self.history_calls[ticker] += 1
-        seed = sum(map(ord, ticker))
-        return make_history(start="2018-01-01", periods=1300, seed=seed)
 
 
 class EqualWeight(AllocationStrategy):
