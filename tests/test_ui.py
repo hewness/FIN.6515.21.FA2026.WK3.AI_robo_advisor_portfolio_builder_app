@@ -340,3 +340,11 @@ def test_projection_dropdown_in_sidebar(portfolio_service):
     assert [tuple(c) for c in dropdown.choices] == [("Monte Carlo", "monte_carlo"), ("Simple percentiles", "simple_percentiles")]
     assert dropdown.value == "monte_carlo" and default_values()["projection_method"] == "monte_carlo"
     assert "projection_method" in INPUT_FIELDS and "Monte Carlo" in sidebar_tooltips()["in-projection"]
+
+
+def test_sharpe_tile_and_notes_show_risk_free_rate_and_cash_return(response):
+    md = response.market_data
+    header = components.summary_header(response, "rule_based")
+    assert f"rf {md.risk_free_rate:.1%}" in header and "T-bill benchmark" in header
+    notes = components.notes_markdown(response)
+    assert f"Cash holdings earn {md.cash_return:.1%}" in notes and f"{md.risk_free_rate:.1%} risk-free rate" in notes

@@ -14,7 +14,7 @@ import sys
 import pandas as pd
 
 from .engine import get_optimization_engine
-from .inputs import DEFAULT_RISK_FREE_RATE
+from .inputs import DEFAULT_CASH_RETURN, DEFAULT_RISK_FREE_RATE
 from .mean_variance import OBJECTIVES
 from .models import AllocationResult, InvestorProfile
 
@@ -60,7 +60,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--objective", choices=OBJECTIVES, help="Mean-variance objective (default: risk_tolerance)")
     parser.add_argument("--target", type=float, help="Target for target_volatility / target_return, e.g. 0.10")
     parser.add_argument("--risk-free-rate", type=float, default=DEFAULT_RISK_FREE_RATE,
-                        help="Return on cash and Sharpe risk-free rate (default 0)")
+                        help="Sharpe ratio risk-free rate (default 0.04)")
+    parser.add_argument("--cash-return", type=float, default=DEFAULT_CASH_RETURN,
+                        help="Annual return on cash holdings (default 0)")
     parser.add_argument("--lookback-years", type=float)
     parser.add_argument("--income", type=float, default=0.0, help="Annual labor income (research_informed)")
     parser.add_argument("--retirement-income", type=float, help="Annual retirement income (default 40%% of income)")
@@ -69,7 +71,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--frontier", action="store_true", help="Print a sample of the efficient frontier")
     args = parser.parse_args(argv)
 
-    engine = get_optimization_engine(risk_free_rate=args.risk_free_rate, lookback_years=args.lookback_years)
+    engine = get_optimization_engine(risk_free_rate=args.risk_free_rate, cash_return=args.cash_return,
+                                     lookback_years=args.lookback_years)
     profile = InvestorProfile(age=args.age, risk_tolerance=args.risk, annual_income=args.income,
                               retirement_income=args.retirement_income, retirement_age=args.retirement_age,
                               financial_wealth=args.wealth)

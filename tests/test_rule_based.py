@@ -78,7 +78,7 @@ def test_metrics_use_market_inputs():
     inputs = universe_inputs()
     result = RuleBasedStrategy().allocate(InvestorProfile(30, 7), inputs)
     risky = result.weights.drop(CASH)
-    expected = float(risky @ inputs.expected_returns[risky.index]) + result.weights[CASH] * 0.04
+    expected = float(risky @ inputs.expected_returns[risky.index]) + result.weights[CASH] * inputs.cash_return
     assert result.metrics.expected_return == pytest.approx(expected)
 
 

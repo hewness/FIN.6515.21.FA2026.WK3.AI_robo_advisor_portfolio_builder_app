@@ -134,12 +134,24 @@ def test_short_history_clamps_window(tmp_path):
     assert any("Only" in n and "years of history" in n for n in result.notes)
 
 
-def test_cash_accrues_at_risk_free_rate(tmp_path):
+def test_cash_accrues_at_cash_return_not_risk_free_rate(tmp_path):
     bt = backtester(tmp_path, {})
-    result = bt.run({"cash": pd.Series({CASH: 1.0})}, BacktestConfig(years=3, risk_free_rate=0.05), initial_value=1_000)
+    config = BacktestConfig(years=3, cash_return=0.05, risk_free_rate=0.04)
+    result = bt.run({"cash": pd.Series({CASH: 1.0})}, config, initial_value=1_000)
     days = len(result.values) - 1
     assert result.metrics["cash"].final_value == pytest.approx(1_000 * 1.05 ** (days / 252))
     assert result.metrics["cash"].volatility == pytest.approx(0.0, abs=1e-12)
+    idle = bt.run({"cash": pd.Series({CASH: 1.0})}, BacktestConfig(years=3), initial_value=1_000)
+    assert idle.metrics["cash"].final_value == pytest.approx(1_000)  # default: cash earns nothing
+
+
+def test_backtest_sharpe_subtracts_risk_free_rate(tmp_path):
+    bt = backtester(tmp_path, {"SPY": growth(0.0004)})
+    zero = bt.run({"p": pd.Series({"SPY": 1.0})}, BacktestConfig(years=5, risk_free_rate=0.0)).metrics["p"]
+    four = bt.run({"p": pd.Series({"SPY": 1.0})}, BacktestConfig(years=5, risk_free_rate=0.04)).metrics["p"]
+    assert zero.final_value == four.final_value
+    if zero.volatility > 0:
+        assert four.sharpe_ratio == pytest.approx(zero.sharpe_ratio - 0.04 / zero.volatility)
 
 
 def test_best_and_worst_years_exclude_partial_final_year(tmp_path):

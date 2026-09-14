@@ -15,12 +15,13 @@ from portfolio_builder.optimization import (
 METRICS = PortfolioMetrics(0.05, 0.1, 0.1)
 
 
-def make_inputs(rf: float = 0.04) -> MarketInputs:
+def make_inputs(rf: float = 0.04, cash: float = 0.0) -> MarketInputs:
     tickers = ["SPY", "BND"]
     return MarketInputs(
         expected_returns=pd.Series([0.10, 0.03], index=tickers),
         covariance=pd.DataFrame([[0.04, 0.002], [0.002, 0.0025]], index=tickers, columns=tickers),
         risk_free_rate=rf,
+        cash_return=cash,
     )
 
 
@@ -63,7 +64,7 @@ def test_asset_class_weights_include_cash():
 
 
 def test_portfolio_metrics_with_cash():
-    inputs = make_inputs(rf=0.04)
+    inputs = make_inputs(rf=0.04, cash=0.04)
     m = portfolio_metrics(pd.Series({"SPY": 0.5, CASH: 0.5}), inputs)
     assert m.expected_return == pytest.approx(0.5 * 0.10 + 0.5 * 0.04)
     assert m.volatility == pytest.approx(0.5 * 0.2)
@@ -94,14 +95,24 @@ def test_inputs_from_returns_annualizes():
 
 def test_cash_returns_zero_by_default():
     from portfolio_builder.backtest import BacktestConfig
-    from portfolio_builder.optimization.inputs import DEFAULT_RISK_FREE_RATE
+    from portfolio_builder.optimization.inputs import DEFAULT_CASH_RETURN, DEFAULT_RISK_FREE_RATE
 
-    assert DEFAULT_RISK_FREE_RATE == 0.0
-    assert BacktestConfig().risk_free_rate == 0.0
+    assert DEFAULT_CASH_RETURN == 0.0 and DEFAULT_RISK_FREE_RATE == 0.04
+    assert BacktestConfig().cash_return == 0.0 and BacktestConfig().risk_free_rate == 0.04
     tickers = ["VTI", "BND"]
     inputs = MarketInputs(pd.Series([0.10, 0.03], index=tickers),
                           pd.DataFrame([[0.04, 0.002], [0.002, 0.0025]], index=tickers, columns=tickers))
-    assert inputs.risk_free_rate == 0.0
+    assert inputs.cash_return == 0.0 and inputs.risk_free_rate == 0.04
     m = portfolio_metrics(pd.Series({"VTI": 0.5, CASH: 0.5}), inputs)
     assert m.expected_return == pytest.approx(0.05)        # cash adds nothing
-    assert m.sharpe_ratio == pytest.approx(0.05 / 0.10)    # Sharpe = return / volatility
+    assert m.volatility == pytest.approx(0.10)
+    assert m.sharpe_ratio == pytest.approx((0.05 - 0.04) / 0.10)  # measured against the 4% risk-free rate
+
+
+def test_cash_return_and_sharpe_rate_are_independent():
+    tickers = ["VTI"]
+    inputs = MarketInputs(pd.Series([0.10], index=tickers), pd.DataFrame([[0.04]], index=tickers, columns=tickers),
+                          risk_free_rate=0.03, cash_return=0.02)
+    m = portfolio_metrics(pd.Series({"VTI": 0.5, CASH: 0.5}), inputs)
+    assert m.expected_return == pytest.approx(0.06)
+    assert m.sharpe_ratio == pytest.approx((0.06 - 0.03) / 0.10)

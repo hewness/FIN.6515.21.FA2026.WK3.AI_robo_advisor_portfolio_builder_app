@@ -237,5 +237,6 @@ class ResearchInformedStrategy(AllocationStrategy):
                 "ticker_order_by_volatility": ticker_order,
                 "estimation_window": inputs.estimation_window,
                 "risk_free_rate": inputs.risk_free_rate,
+                "cash_return": inputs.cash_return,
             },
         )

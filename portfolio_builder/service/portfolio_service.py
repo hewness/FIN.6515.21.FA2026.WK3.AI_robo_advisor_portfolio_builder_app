@@ -160,7 +160,8 @@ class PortfolioService:
                 backtest = self.backtester.run(
                     {method: result.weights for method, result in results.items()},
                     BacktestConfig(years=req.backtest_years, rebalance=req.rebalance,
-                                   benchmark=BENCHMARK_TICKER, risk_free_rate=inputs.risk_free_rate),
+                                   benchmark=BENCHMARK_TICKER, risk_free_rate=inputs.risk_free_rate,
+                                   cash_return=inputs.cash_return),
                     initial_value=req.initial_investment,
                 )
         except (OptimizationError, MarketDataError, BacktestError) as exc:
@@ -212,7 +213,7 @@ class PortfolioService:
             research_informed=research_rec,
             efficient_frontier=frontier,
             research_insight=build_research_insight(req, summary, recs),
-            backtest=_backtest_data(backtest, inputs.risk_free_rate),
+            backtest=_backtest_data(backtest, inputs.risk_free_rate, inputs.cash_return),
             notes=build_notes(req, summary, rule_rec, mvo_rec, research_rec),
             warnings=input_warnings(req, summary, rule_rec, mvo_rec),
             generated_at=datetime.now(timezone.utc).replace(microsecond=0),
@@ -233,7 +234,7 @@ class PortfolioService:
         holdings = []
         for ticker, weight in weights.items():
             asset_class = get_asset_class("cash") if ticker == CASH else get_asset_class_for_ticker(ticker)
-            expected = inputs.risk_free_rate if ticker == CASH else inputs.expected_returns.get(ticker)
+            expected = inputs.cash_return if ticker == CASH else inputs.expected_returns.get(ticker)
             holdings.append(Holding(ticker=ticker, name=names.get(ticker, ticker), asset_class=asset_class.name,
                                     role=asset_class.role, weight=float(weight), amount=amounts[ticker],
                                     expected_return=None if expected is None else float(expected)))
@@ -324,14 +325,14 @@ def _frontier_data(mvo: AllocationResult, rule_rec: PortfolioRecommendation,
 
 
 def _asset_class_points(inputs: MarketInputs) -> list[AssetClassPoint]:
-    """Equal-weight blend of each asset class's funds, plus Cash at the risk-free rate."""
+    """Equal-weight blend of each asset class's funds, plus Cash at its (zero-volatility) cash return."""
     mu, cov = inputs.expected_returns, inputs.covariance
     points = []
     for ac in get_asset_classes():
         tickers = [t for t in ac.tickers if t in inputs.tickers]
         if ac.key == "cash":
             points.append(AssetClassPoint(asset_class=ac.name, tickers=[CASH],
-                                          expected_return=inputs.risk_free_rate, volatility=0.0))
+                                          expected_return=inputs.cash_return, volatility=0.0))
             continue
         if not tickers:
             continue
@@ -346,7 +347,7 @@ def _asset_class_points(inputs: MarketInputs) -> list[AssetClassPoint]:
     return points
 
 
-def _backtest_data(result: BacktestResult, risk_free_rate: float) -> BacktestData:
+def _backtest_data(result: BacktestResult, risk_free_rate: float, cash_return: float) -> BacktestData:
     """Weekly-sampled series (last value, deepest drawdown of the week) plus full-resolution metrics."""
     weekly_values = result.values.resample("W-FRI").last()
     weekly_dd = result.drawdowns.resample("W-FRI").min()
@@ -369,7 +370,8 @@ def _backtest_data(result: BacktestResult, risk_free_rate: float) -> BacktestDat
     notes = list(result.notes)
     notes.append(
         f"The backtest grows the initial investment only (no contributions), ignores fees and taxes, rebalances "
-        f"{result.rebalance}, and assumes cash earns a constant {risk_free_rate:.1%} per year."
+        f"{result.rebalance}, and assumes cash earns a constant {cash_return:.1%} per year. Sharpe ratios subtract a "
+        f"{risk_free_rate:.1%} risk-free rate."
     )
     return BacktestData(
         start=result.start.date().isoformat(),
@@ -396,6 +398,7 @@ def _market_summary(inputs: MarketInputs, data_as_of: str | None) -> MarketDataS
         frequency=str(window["frequency"]),
         risk_free_rate=inputs.risk_free_rate,
         data_as_of=data_as_of,
+        cash_return=inputs.cash_return,
     )
 
 

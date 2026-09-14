@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from ..market_data import MarketDataService
-from ..optimization.inputs import DEFAULT_RISK_FREE_RATE
+from ..optimization.inputs import DEFAULT_CASH_RETURN, DEFAULT_RISK_FREE_RATE
 from ..optimization.models import CASH
 from ..universe import get_history_proxies
 
@@ -29,8 +29,9 @@ class BacktestConfig:
     years: int = 10
     rebalance: Rebalance = "quarterly"
     benchmark: str = "SPY"
-    risk_free_rate: float = DEFAULT_RISK_FREE_RATE
+    risk_free_rate: float = DEFAULT_RISK_FREE_RATE  # Sharpe benchmark
     use_proxies: bool = True
+    cash_return: float = DEFAULT_CASH_RETURN  # what cash holdings earn
 
     def __post_init__(self) -> None:
         if self.years < 1:
@@ -207,7 +208,7 @@ def _simulate(weights: pd.Series, window: pd.DataFrame, config: BacktestConfig, 
     risky = weights.drop(CASH, errors="ignore")
     returns = window[risky.index].to_numpy()
     w = risky.to_numpy()
-    cash_daily = (1.0 + config.risk_free_rate) ** (1.0 / TRADING_DAYS) - 1.0
+    cash_daily = (1.0 + config.cash_return) ** (1.0 / TRADING_DAYS) - 1.0
     periods = window.index.to_period(_PERIOD_CODES[config.rebalance])
     boundaries = np.flatnonzero(np.r_[True, periods[1:] != periods[:-1]])
 

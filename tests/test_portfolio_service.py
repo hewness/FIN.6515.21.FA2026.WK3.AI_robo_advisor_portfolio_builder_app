@@ -162,7 +162,7 @@ def test_asset_class_points(response):
     points = {p.asset_class: p for p in response.efficient_frontier.asset_class_points}
     assert len(points) == 7
     assert points["Cash and Money Markets"].volatility == 0
-    assert points["Cash and Money Markets"].expected_return == response.market_data.risk_free_rate
+    assert points["Cash and Money Markets"].expected_return == response.market_data.cash_return
     assert points["US large-cap stocks"].tickers == ["VTI"]
 
 
@@ -295,7 +295,7 @@ def test_holdings_expected_returns_add_up_to_portfolio(response, method, portfol
     rec = response.recommendation(method)
     inputs = portfolio_service.engine.market_inputs()
     for h in rec.holdings:
-        expected = inputs.risk_free_rate if h.ticker == "CASH" else inputs.expected_returns[h.ticker]
+        expected = inputs.cash_return if h.ticker == "CASH" else inputs.expected_returns[h.ticker]
         assert h.expected_return == pytest.approx(expected)
     assert sum(h.weight * h.expected_return for h in rec.holdings) == pytest.approx(rec.expected_return)
 
@@ -319,3 +319,14 @@ def test_simple_percentiles_projection(portfolio_service, response):
         # portfolios themselves don't change with the projection method
         assert simple.recommendation(method).holdings == response.recommendation(method).holdings
     assert "simple percentiles" in simple.notes[-1]
+
+
+def test_sharpe_uses_risk_free_rate_and_cash_earns_cash_return(response, portfolio_service):
+    md = response.market_data
+    inputs = portfolio_service.engine.market_inputs()
+    assert (md.risk_free_rate, md.cash_return) == (inputs.risk_free_rate, inputs.cash_return)
+    for method in ("rule_based", "mean_variance", "research_informed"):
+        rec = response.recommendation(method)
+        assert rec.sharpe_ratio == pytest.approx((rec.expected_return - md.risk_free_rate) / rec.volatility)
+    note = next(n for n in response.backtest.notes if "cash earns" in n)
+    assert f"{md.cash_return:.1%}" in note and f"{md.risk_free_rate:.1%} risk-free rate" in note

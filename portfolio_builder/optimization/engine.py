@@ -7,7 +7,7 @@ from typing import Any
 
 from ..market_data import MarketDataService, get_market_data_service
 from .base import AllocationStrategy
-from .inputs import DEFAULT_RISK_FREE_RATE, MarketInputs, build_market_inputs
+from .inputs import DEFAULT_CASH_RETURN, DEFAULT_RISK_FREE_RATE, MarketInputs, build_market_inputs
 from .mean_variance import MeanVarianceStrategy
 from .models import AllocationResult, InvestorProfile
 from .research_informed import ResearchInformedStrategy
@@ -36,9 +36,11 @@ class PortfolioOptimizationEngine:
         risk_free_rate: float = DEFAULT_RISK_FREE_RATE,
         frequency: str = "monthly",
         lookback_years: float | None = None,
+        cash_return: float = DEFAULT_CASH_RETURN,
     ) -> None:
         self.market_data = market_data or get_market_data_service()
         self.risk_free_rate = risk_free_rate
+        self.cash_return = cash_return
         self.frequency = frequency
         self.lookback_years = lookback_years
         self._strategies: dict[str, AllocationStrategy] = {}
@@ -72,7 +74,7 @@ class PortfolioOptimizationEngine:
     ) -> MarketInputs:
         """Annualized expected returns / covariance for ``tickers`` (default: the universe), memoized."""
         names = tuple(self.market_data.default_tickers if tickers is None else [t.upper() for t in tickers])
-        key = (names, self.frequency, start, end, self.lookback_years, self.risk_free_rate)
+        key = (names, self.frequency, start, end, self.lookback_years, self.risk_free_rate, self.cash_return)
         if key not in self._inputs_cache:
             self._inputs_cache[key] = build_market_inputs(
                 self.market_data,
@@ -82,6 +84,7 @@ class PortfolioOptimizationEngine:
                 end=end,
                 lookback_years=self.lookback_years,
                 risk_free_rate=self.risk_free_rate,
+                cash_return=self.cash_return,
             )
         return self._inputs_cache[key]
 

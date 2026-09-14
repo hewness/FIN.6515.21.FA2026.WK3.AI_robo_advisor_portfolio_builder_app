@@ -244,8 +244,9 @@ class MarketDataSummary(BaseModel):
     estimation_end: str | None
     observations: int
     frequency: str
-    risk_free_rate: float
+    risk_free_rate: float  # Sharpe ratio benchmark
     data_as_of: str | None
+    cash_return: float = 0.0  # what cash holdings earn
 
 
 class Holding(BaseModel):

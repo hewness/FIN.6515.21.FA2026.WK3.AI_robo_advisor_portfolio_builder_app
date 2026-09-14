@@ -50,7 +50,9 @@ def _card(resp: PortfolioResponse, method: str) -> str:
         _tile("Volatility", f"{rec.volatility:.1%}", "per year",
               "Annualized standard deviation of returns: how much the portfolio typically swings."),
         _tile("Sharpe", f"{rec.sharpe_ratio:.2f}", f"rf {resp.market_data.risk_free_rate:.1%}",
-              "Return in excess of the risk-free rate per unit of volatility. Higher is better."),
+              f"Return in excess of a {resp.market_data.risk_free_rate:.1%} risk-free rate (T-bill benchmark) per "
+              "unit of volatility. Higher is better. Cash holdings themselves earn "
+              f"{resp.market_data.cash_return:.1%}."),
         _tile("Max drawdown", f"{rec.max_drawdown:.1%}" if rec.max_drawdown is not None else "—",
               f"SPY {bench.max_drawdown:.1%}" if bench else "backtest",
               f"Largest peak-to-trough loss in the {resp.backtest.years_covered:.0f}-year backtest "
@@ -263,7 +265,8 @@ def notes_markdown(resp: PortfolioResponse) -> str:
         *[f"- {n}" for n in resp.backtest.notes],
         "#### Assumptions",
         f"- Expected returns and risk are estimated from {md.observations} {md.frequency} returns "
-        f"({md.estimation_start} to {md.estimation_end}); the risk-free rate is {md.risk_free_rate:.1%}.",
+        f"({md.estimation_start} to {md.estimation_end}). Cash holdings earn {md.cash_return:.1%}; Sharpe ratios "
+        f"subtract a fixed {md.risk_free_rate:.1%} risk-free rate (a T-bill benchmark).",
         f"- Your {resp.profile.horizon_years}-year horizon sets the effective risk level: "
         f"{resp.profile.horizon_adjustment}.",
         (f"- Monte Carlo projections use {resp.rule_based.projection.simulations:,} simulated month-by-month return "

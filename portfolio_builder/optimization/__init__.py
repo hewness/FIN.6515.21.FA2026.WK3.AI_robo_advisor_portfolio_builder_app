@@ -4,7 +4,7 @@ Typical use::
 
     from portfolio_builder.optimization import InvestorProfile, get_optimization_engine
 
-    engine = get_optimization_engine()                    # cash return / risk-free rate defaults to 0%
+    engine = get_optimization_engine()                    # cash earns 0%; Sharpe risk-free rate 4%
     profile = InvestorProfile(age=40, risk_tolerance=6)
     rule = engine.optimize("rule_based", profile)
     mvo = engine.optimize("mean_variance", profile)       # includes mvo.frontier

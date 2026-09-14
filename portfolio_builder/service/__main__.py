@@ -85,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Glide path: {pr.glide_path} -> equity target {pr.equity_target:.1%}")
     print(f"Human capital: ${pr.human_capital:,.0f} -> research-informed equity {pr.research_equity_target:.1%}")
     print(f"Estimates: {md.estimation_start} to {md.estimation_end} ({md.observations} {md.frequency} obs), "
-          f"risk-free {md.risk_free_rate:.2%}, data as of {md.data_as_of}")
+          f"Sharpe risk-free rate {md.risk_free_rate:.2%}, cash return {md.cash_return:.2%}, data as of {md.data_as_of}")
     _print_recommendation(response.rule_based)
     _print_recommendation(response.mean_variance)
     _print_recommendation(response.research_informed)

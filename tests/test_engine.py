@@ -80,7 +80,11 @@ def test_insufficient_history_raises(tmp_path):
         engine.optimize("mean_variance", PROFILE)
 
 
-def test_default_risk_free_rate_is_zero(tmp_path):
+def test_default_cash_return_zero_and_sharpe_risk_free_rate_four_percent(tmp_path):
     service = MarketDataService(LongHistoryConnector(), ParquetCache(tmp_path / "rf"))
     engine = PortfolioOptimizationEngine(market_data=service)
-    assert engine.risk_free_rate == 0.0 and engine.market_inputs().risk_free_rate == 0.0
+    inputs = engine.market_inputs()
+    assert engine.risk_free_rate == inputs.risk_free_rate == 0.04
+    assert engine.cash_return == inputs.cash_return == 0.0
+    other = PortfolioOptimizationEngine(market_data=service, risk_free_rate=0.03, cash_return=0.01)
+    assert (other.market_inputs().risk_free_rate, other.market_inputs().cash_return) == (0.03, 0.01)

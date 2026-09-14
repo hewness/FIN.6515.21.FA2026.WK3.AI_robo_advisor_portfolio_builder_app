@@ -14,8 +14,10 @@ from .models import CASH, PortfolioMetrics
 
 PERIODS_PER_YEAR = {"daily": 252, "weekly": 52, "monthly": 12}
 MIN_OBSERVATIONS = 24
-# Return on cash, also used as the Sharpe ratio's risk-free rate: 0% (cash earns nothing, Sharpe = return / vol).
-DEFAULT_RISK_FREE_RATE = 0.0
+# Uninvested cash earns nothing, but Sharpe ratios are measured against what a riskless alternative
+# (short-term T-bills) would pay: a fixed 4% a year.
+DEFAULT_CASH_RETURN = 0.0
+DEFAULT_RISK_FREE_RATE = 0.04
 
 
 @dataclass(frozen=True)
@@ -24,11 +26,12 @@ class MarketInputs:
 
     expected_returns: pd.Series
     covariance: pd.DataFrame
-    risk_free_rate: float = DEFAULT_RISK_FREE_RATE
+    risk_free_rate: float = DEFAULT_RISK_FREE_RATE  # Sharpe benchmark
     frequency: str = "monthly"
     start: pd.Timestamp | None = None
     end: pd.Timestamp | None = None
     observations: int = 0
+    cash_return: float = DEFAULT_CASH_RETURN  # what a CASH holding earns
 
     def __post_init__(self) -> None:
         tickers = list(self.expected_returns.index)
@@ -61,7 +64,8 @@ class MarketInputs:
 
     @classmethod
     def from_returns(cls, returns: pd.DataFrame, frequency: str = "monthly",
-                     risk_free_rate: float = DEFAULT_RISK_FREE_RATE) -> MarketInputs:
+                     risk_free_rate: float = DEFAULT_RISK_FREE_RATE,
+                     cash_return: float = DEFAULT_CASH_RETURN) -> MarketInputs:
         """Annualize sample mean and covariance of periodic returns."""
         if frequency not in PERIODS_PER_YEAR:
             raise ValueError(f"frequency must be one of {sorted(PERIODS_PER_YEAR)}")
@@ -79,6 +83,7 @@ class MarketInputs:
             start=returns.index.min(),
             end=returns.index.max(),
             observations=len(returns),
+            cash_return=cash_return,
         )
 
 
@@ -90,24 +95,26 @@ def build_market_inputs(
     end: str | pd.Timestamp | None = None,
     lookback_years: float | None = None,
     risk_free_rate: float = DEFAULT_RISK_FREE_RATE,
+    cash_return: float = DEFAULT_CASH_RETURN,
 ) -> MarketInputs:
     """Returns over the common window where every ticker has data, annualized."""
     returns = service.get_returns(tickers, frequency=frequency, start=start, end=end, align="inner")
     if lookback_years is not None and not returns.empty:
         cutoff = returns.index.max() - pd.DateOffset(months=round(lookback_years * 12))
         returns = returns[returns.index > cutoff]
-    return MarketInputs.from_returns(returns, frequency=frequency, risk_free_rate=risk_free_rate)
+    return MarketInputs.from_returns(returns, frequency=frequency, risk_free_rate=risk_free_rate,
+                                     cash_return=cash_return)
 
 
 def portfolio_metrics(weights: pd.Series, inputs: MarketInputs) -> PortfolioMetrics:
-    """Annualized metrics; a CASH weight earns the risk-free rate with zero volatility."""
+    """Annualized metrics; a CASH weight earns ``cash_return`` with zero volatility, Sharpe uses ``risk_free_rate``."""
     cash = float(weights.get(CASH, 0.0))
     risky = weights.drop(CASH, errors="ignore")
     unknown = set(risky.index) - set(inputs.tickers)
     if unknown:
         raise OptimizationError(f"No market inputs for: {sorted(unknown)}")
     w = risky.reindex(inputs.tickers, fill_value=0.0).to_numpy()
-    expected = float(w @ inputs.expected_returns.to_numpy()) + cash * inputs.risk_free_rate
+    expected = float(w @ inputs.expected_returns.to_numpy()) + cash * inputs.cash_return
     volatility = float(np.sqrt(max(w @ inputs.covariance.to_numpy() @ w, 0.0)))
     sharpe = (expected - inputs.risk_free_rate) / volatility if volatility > 1e-12 else 0.0
     return PortfolioMetrics(expected, volatility, sharpe)
